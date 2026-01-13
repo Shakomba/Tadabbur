@@ -141,6 +141,7 @@ body {
 /* ===== Progress Bar ===== */
 .progress-track {
   cursor: pointer;
+  touch-action: none;
 }
 
 .progress-fill {
@@ -153,6 +154,14 @@ body {
 }
 
 .progress-track:hover .progress-handle {
+  opacity: 1;
+}
+
+.progress-track.is-dragging .progress-fill {
+  transition: none;
+}
+
+.progress-track.is-dragging .progress-handle {
   opacity: 1;
 }
 
@@ -749,4 +758,3 @@ body {
   will-change: transform;
   transform: translateZ(0);
 }
-

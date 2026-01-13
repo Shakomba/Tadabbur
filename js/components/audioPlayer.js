@@ -11,6 +11,7 @@ const AudioPlayer = {
   container: null,
   audioElement: null,
   isVisible: false,
+  isSeeking: false,
   speedOptions: [0.5, 0.75, 1, 1.25, 1.5, 2],
   currentSpeed: 1,
 
@@ -46,7 +47,7 @@ const AudioPlayer = {
             <div class="flex-1 progress-track h-1 bg-emerald-800 rounded-full relative cursor-pointer" id="progress-track" dir="ltr">
               <div class="progress-fill h-full bg-gold-400 rounded-full pointer-events-none" id="progress-fill" style="width: 0%"></div>
               <div class="progress-handle absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-gold-400 rounded-full shadow-md cursor-grab active:cursor-grabbing"
-                   id="progress-handle" style="right: 100%; transform: translate(50%, -50%)"></div>
+                   id="progress-handle" style="left: 0%; transform: translate(-50%, -50%)"></div>
               <!-- Verse Markers -->
               <div id="verse-markers" class="absolute inset-0 pointer-events-none"></div>
             </div>
@@ -57,11 +58,19 @@ const AudioPlayer = {
 
           <!-- Bottom Row: Controls & Info -->
           <div class="flex items-center justify-between gap-4">
-            <!-- Empty spacer for balance -->
-            <div class="flex-1"></div>
+            <!-- Left: Surah Info -->
+            <div class="flex items-center gap-2 flex-1">
+              <div class="w-8 h-8 bg-emerald-800 rounded-lg flex items-center justify-center shrink-0">
+                ${icon('volume', 'w-4 h-4 text-gold-400')}
+              </div>
+              <div class="hidden md:block min-w-0 max-w-[200px]">
+                <div class="text-white text-sm font-medium truncate" id="surah-name">—</div>
+                <div class="text-emerald-300 text-xs truncate" id="verse-info">—</div>
+              </div>
+            </div>
 
             <!-- Center: Playback Controls -->
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 justify-center">
               <!-- Skip Forward -->
               <button id="skip-forward" class="p-1.5 text-white hover:text-gold-400 transition-colors"
                       title="١٠ چرکە بۆ پێش">
@@ -87,8 +96,11 @@ const AudioPlayer = {
                 </div>
               </button>
 
-              <!-- Speed Control -->
-              <div class="speed-dropdown relative mr-2">
+            </div>
+
+            <!-- Right: Speed Control -->
+            <div class="flex items-center flex-1 justify-end">
+              <div class="speed-dropdown relative">
                 <button id="speed-btn" class="px-2 py-1 bg-emerald-800 rounded-lg text-gold-400
                                               hover:bg-emerald-700 transition-colors text-xs font-medium">
                   <span id="speed-value">١x</span>
@@ -100,17 +112,6 @@ const AudioPlayer = {
                     </div>
                   `).join('')}
                 </div>
-              </div>
-            </div>
-
-            <!-- Right: Surah Info -->
-            <div class="flex items-center gap-2 flex-1 justify-end">
-              <div class="w-8 h-8 bg-emerald-800 rounded-lg flex items-center justify-center shrink-0">
-                ${icon('volume', 'w-4 h-4 text-gold-400')}
-              </div>
-              <div class="hidden md:block min-w-0 max-w-[200px]">
-                <div class="text-white text-sm font-medium truncate" id="surah-name">—</div>
-                <div class="text-emerald-300 text-xs truncate" id="verse-info">—</div>
               </div>
             </div>
           </div>
@@ -163,56 +164,41 @@ const AudioPlayer = {
       skipBackward.addEventListener('click', () => this.skip(-10));
     }
 
-    // Progress bar seeking (click)
+    // Progress bar seeking (drag anywhere)
     const progressTrack = $('#progress-track', this.container);
     if (progressTrack) {
-      progressTrack.addEventListener('click', (e) => this._seekFromClick(e));
-    }
-
-    // Progress bar dragging
-    const progressHandle = $('#progress-handle', this.container);
-    if (progressHandle && progressTrack) {
-      let isDragging = false;
-
-      const startDrag = (e) => {
-        isDragging = true;
-        progressHandle.style.cursor = 'grabbing';
+      const startSeek = (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        this.isSeeking = true;
+        progressTrack.classList.add('is-dragging');
         document.body.style.userSelect = 'none';
-      };
-
-      const drag = (e) => {
-        if (!isDragging) return;
+        if (progressTrack.setPointerCapture) {
+          progressTrack.setPointerCapture(e.pointerId);
+        }
         this._seekFromClick(e);
       };
 
-      const endDrag = () => {
-        isDragging = false;
-        progressHandle.style.cursor = 'grab';
-        document.body.style.userSelect = '';
+      const moveSeek = (e) => {
+        if (!this.isSeeking) return;
+        this._seekFromClick(e);
       };
 
-      progressHandle.addEventListener('mousedown', startDrag);
-      document.addEventListener('mousemove', drag);
-      document.addEventListener('mouseup', endDrag);
-
-      // Touch support for mobile
-      progressHandle.addEventListener('touchstart', (e) => {
-        startDrag(e);
-        e.preventDefault();
-      });
-      document.addEventListener('touchmove', (e) => {
-        if (isDragging) {
-          const touch = e.touches[0];
-          const rect = progressTrack.getBoundingClientRect();
-          const clickPosition = touch.clientX - rect.left;
-          const percentage = (clickPosition / rect.width) * 100;
-          const newTime = (percentage / 100) * (this.audioElement?.duration || 0);
-          if (this.audioElement) {
-            this.audioElement.currentTime = Math.max(0, Math.min(this.audioElement.duration, newTime));
-          }
+      const endSeek = (e) => {
+        if (!this.isSeeking) return;
+        this.isSeeking = false;
+        progressTrack.classList.remove('is-dragging');
+        document.body.style.userSelect = '';
+        if (progressTrack.hasPointerCapture &&
+            progressTrack.hasPointerCapture(e.pointerId) &&
+            progressTrack.releasePointerCapture) {
+          progressTrack.releasePointerCapture(e.pointerId);
         }
-      });
-      document.addEventListener('touchend', endDrag);
+      };
+
+      progressTrack.addEventListener('pointerdown', startSeek);
+      progressTrack.addEventListener('pointermove', moveSeek);
+      progressTrack.addEventListener('pointerup', endSeek);
+      progressTrack.addEventListener('pointercancel', endSeek);
     }
 
     // Speed control
@@ -292,8 +278,9 @@ const AudioPlayer = {
     container.querySelectorAll('[data-verse]').forEach(marker => {
       marker.addEventListener('click', (e) => {
         e.stopPropagation();
-        const verseIndex = parseInt(marker.dataset.verse);
-        AudioSync.seekToVerse(verseIndex);
+        const verseIndex = parseInt(marker.dataset.verse, 10);
+        const verseTime = AudioSync.getVerseTimestamp(verseIndex);
+        this.seekTo(verseTime);
         this.play();
       });
     });
@@ -365,39 +352,35 @@ const AudioPlayer = {
   },
 
   /**
-   * Seek audio from click on progress bar
-   * @param {MouseEvent} e - Click event
+   * Seek audio from pointer position on progress bar
+   * @param {PointerEvent|MouseEvent|TouchEvent} e - Pointer event
    */
   _seekFromClick(e) {
     if (!this.audioElement || !this.audioElement.duration) return;
 
     const track = $('#progress-track', this.container);
+    if (!track) return;
+
     const rect = track.getBoundingClientRect();
+    const clientX = e.clientX ?? (e.touches ? e.touches[0].clientX : null);
+    if (clientX === null) return;
+
     // LTR: calculate from left side (progress bar fills left to right)
-    const clickPosition = e.clientX - rect.left;
-    const percentage = (clickPosition / rect.width) * 100;
-    const newTime = (percentage / 100) * this.audioElement.duration;
+    const position = Math.min(Math.max(clientX - rect.left, 0), rect.width);
+    const ratio = rect.width ? position / rect.width : 0;
+    const newTime = ratio * this.audioElement.duration;
 
     this.audioElement.currentTime = Math.max(0, Math.min(this.audioElement.duration, newTime));
+    this._updateProgressUI(ratio * 100, this.audioElement.currentTime);
+    State.updateAudioState({ currentTime: this.audioElement.currentTime });
   },
 
   /**
-   * Seek to a specific time
-   * @param {number} time - Time in seconds
+   * Update progress UI elements
+   * @param {number} progress - Progress percentage (0-100)
+   * @param {number} currentTime - Current time in seconds
    */
-  seekTo(time) {
-    if (!this.audioElement) return;
-    this.audioElement.currentTime = Math.max(0, Math.min(this.audioElement.duration || 0, time));
-  },
-
-  /**
-   * Update progress bar
-   */
-  _updateProgress() {
-    if (!this.audioElement) return;
-
-    const progress = calculateProgress(this.audioElement.currentTime, this.audioElement.duration);
-
+  _updateProgressUI(progress, currentTime) {
     const progressFill = $('#progress-fill', this.container);
     const progressHandle = $('#progress-handle', this.container);
     const currentTimeEl = $('#current-time', this.container);
@@ -406,12 +389,35 @@ const AudioPlayer = {
       progressFill.style.width = `${progress}%`;
     }
     if (progressHandle) {
-      // Position handle at the end of the progress fill (right side moves left as progress increases)
-      progressHandle.style.right = `${100 - progress}%`;
+      progressHandle.style.left = `${progress}%`;
     }
     if (currentTimeEl) {
-      currentTimeEl.textContent = formatDuration(this.audioElement.currentTime);
+      currentTimeEl.textContent = formatDuration(currentTime);
     }
+  },
+
+  /**
+   * Seek to a specific time
+   * @param {number} time - Time in seconds
+   */
+  seekTo(time) {
+    if (!this.audioElement) return;
+    const duration = this.audioElement.duration || 0;
+    const clamped = Math.max(0, Math.min(duration, time));
+    this.audioElement.currentTime = clamped;
+    const progress = duration ? (clamped / duration) * 100 : 0;
+    this._updateProgressUI(progress, clamped);
+    State.updateAudioState({ currentTime: clamped });
+  },
+
+  /**
+   * Update progress bar
+   */
+  _updateProgress() {
+    if (!this.audioElement || this.isSeeking) return;
+
+    const progress = calculateProgress(this.audioElement.currentTime, this.audioElement.duration);
+    this._updateProgressUI(progress, this.audioElement.currentTime);
 
     State.updateAudioState({
       currentTime: this.audioElement.currentTime
