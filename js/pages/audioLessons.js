@@ -32,18 +32,6 @@ const AudioLessonsPage = {
 
     this.container.innerHTML = `
       <div class="min-h-screen bg-cream-50">
-        <!-- Header -->
-        <div class="bg-cream-50 text-white py-12 md:py-16">
-          <div class="max-w-6xl mx-auto px-4">
-            <h1 class="text-3xl md:text-4xl font-bold mb-4">
-              ${strings.audioLessons || 'وانە دەنگییەکان'}
-            </h1>
-            <p class="text-emerald-200 text-lg">
-              گوێبیستی لە تەفسیر و تەدەبوری سورەکانی قوڕئان بکە
-            </p>
-          </div>
-        </div>
-
         <div class="max-w-6xl mx-auto px-4 py-8 md:py-12 ">
           <div class="inline-flex items-center gap-2 mb-8 px-4 py-2 rounded-full bg-emerald-50 text-emerald-800 font-medium">
             جوزئی ٣٠ (عم)

@@ -20,6 +20,9 @@ const AudioPlayer = {
   swipeCurrentY: 0,
   lastSnapIndex: null,
   markers: [],
+  _blobUrl: null,
+  _sourceToken: 0,
+  _sourcePromise: null,
   speedOptions: [0.5, 0.75, 1, 1.25, 1.5, 2],
   currentSpeed: 1,
 
@@ -62,7 +65,7 @@ const AudioPlayer = {
           <!-- Top Row: Progress Bar with Times -->
           <div class="flex items-center gap-3 mb-2">
             <!-- Duration (Left) -->
-            <span class="text-emerald-300 text-sm tabular-nums shrink-0" id="duration">٠٠:٠٠</span>
+            <span class="audio-time text-emerald-300 text-sm tabular-nums shrink-0" id="duration">٠٠:٠٠</span>
 
             <!-- Progress Bar (Center - draggable) -->
             <div class="flex-1 progress-track h-1 bg-emerald-800 rounded-full relative cursor-pointer" id="progress-track" dir="ltr">
@@ -74,7 +77,7 @@ const AudioPlayer = {
             </div>
 
             <!-- Current Time (Right) -->
-            <span class="text-white text-sm tabular-nums shrink-0" id="current-time">٠٠:٠٠</span>
+            <span class="audio-time text-white text-sm tabular-nums shrink-0" id="current-time">٠٠:٠٠</span>
           </div>
 
           <!-- Bottom Row: Controls & Info -->
@@ -289,8 +292,7 @@ const AudioPlayer = {
     if (!this.audioElement || !surah.audioUrl) return;
 
     this.currentSurah = surah;
-    this.audioElement.src = surah.audioUrl;
-    this.audioElement.load();
+    this._sourcePromise = this._setAudioSource(surah.audioUrl);
 
     // Update UI
     const surahName = $('#surah-name', this.container);
@@ -334,19 +336,20 @@ const AudioPlayer = {
     const container = $('#verse-markers', this.container);
     if (!container || !verses || !duration) return;
 
+    const strings = State.get('appData')?.uiStrings || {};
+    const verseLabel = (!strings.verse || /^[?]+$/.test(strings.verse)) ? 'ئایەت' : strings.verse;
+
     const markers = getVerseMarkers(verses, duration);
     this.markers = markers;
     this.lastSnapIndex = null;
 
     container.innerHTML = markers.map(marker => `
-      <div class="absolute top-0 bottom-0 w-0.5 bg-emerald-600 opacity-50 hover:opacity-100
-                  cursor-pointer transition-opacity group pointer-events-auto"
+      <div class="verse-marker"
            style="left: ${marker.position}%"
-           data-verse="${marker.index}"
-           title="${toKurdishNumber(marker.verseNumber)} :ئایەتی">
-        <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-emerald-800 text-white
-                    text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-          ئایەتی ${toKurdishNumber(marker.verseNumber)}
+           data-verse="${marker.index}">
+        <div class="verse-marker-line"></div>
+        <div class="verse-marker-tooltip">
+          ${verseLabel} ${toKurdishNumber(marker.verseNumber)}
         </div>
       </div>
     `).join('');
@@ -357,6 +360,7 @@ const AudioPlayer = {
         e.stopPropagation();
         const verseIndex = parseInt(marker.dataset.verse, 10);
         const verseTime = AudioSync.getVerseTimestamp(verseIndex);
+        if (!Number.isFinite(verseTime)) return;
         this.seekTo(verseTime);
         this._hapticTick(8);
         this.play();
@@ -385,9 +389,13 @@ const AudioPlayer = {
     if (!this.isVisible && !this.isMinimized) {
       this.restore();
     }
-    this.audioElement.play().catch(err => {
-      console.error('Error playing audio:', err);
-    });
+    Promise.resolve(this._sourcePromise)
+      .catch(() => {})
+      .finally(() => {
+        this.audioElement.play().catch(err => {
+          console.error('Error playing audio:', err);
+        });
+      });
   },
 
   /**
@@ -404,8 +412,9 @@ const AudioPlayer = {
    */
   skip(seconds) {
     if (!this.audioElement) return;
+    const duration = this._getSeekDuration();
     this.audioElement.currentTime = Math.max(0,
-      Math.min(this.audioElement.duration, this.audioElement.currentTime + seconds)
+      Math.min(duration, this.audioElement.currentTime + seconds)
     );
   },
 
@@ -494,6 +503,9 @@ const AudioPlayer = {
     let closest = null;
     for (const marker of this.markers) {
       const markerTime = AudioSync.getVerseTimestamp(marker.index);
+      if (!Number.isFinite(markerTime)) {
+        continue;
+      }
       const markerPx = (marker.position / 100) * trackWidth;
       const distance = Math.abs(positionPx - markerPx);
       if (!closest || distance < closest.distance) {
@@ -516,7 +528,7 @@ const AudioPlayer = {
    * @param {PointerEvent|MouseEvent|TouchEvent} e - Pointer event
    */
   _seekFromClick(e) {
-    if (!this.audioElement || !this.audioElement.duration) return;
+    if (!this.audioElement) return;
 
     const track = $('#progress-track', this.container);
     if (!track) return;
@@ -527,7 +539,8 @@ const AudioPlayer = {
 
     // LTR: calculate from left side (progress bar fills left to right)
     const position = Math.min(Math.max(clientX - rect.left, 0), rect.width);
-    const duration = this.audioElement.duration;
+    const duration = this._getSeekDuration();
+    if (!duration) return;
     const ratio = rect.width ? position / rect.width : 0;
     let newTime = ratio * duration;
     let progress = ratio * 100;
@@ -573,6 +586,22 @@ const AudioPlayer = {
     if (currentTimeEl) {
       currentTimeEl.textContent = formatDuration(currentTime);
     }
+    this._syncTimeWidths();
+  },
+
+  _syncTimeWidths() {
+    const durationEl = $('#duration', this.container);
+    const currentTimeEl = $('#current-time', this.container);
+    if (!durationEl || !currentTimeEl) return;
+
+    durationEl.style.minWidth = '';
+    currentTimeEl.style.minWidth = '';
+
+    const maxWidth = Math.max(durationEl.offsetWidth, currentTimeEl.offsetWidth);
+    if (!maxWidth) return;
+
+    durationEl.style.minWidth = `${maxWidth}px`;
+    currentTimeEl.style.minWidth = `${maxWidth}px`;
   },
 
   /**
@@ -581,7 +610,7 @@ const AudioPlayer = {
    */
   seekTo(time) {
     if (!this.audioElement) return;
-    const duration = this.audioElement.duration || 0;
+    const duration = this._getSeekDuration();
     const clamped = Math.max(0, Math.min(duration, time));
     this.audioElement.currentTime = clamped;
     const progress = duration ? (clamped / duration) * 100 : 0;
@@ -595,7 +624,8 @@ const AudioPlayer = {
   _updateProgress() {
     if (!this.audioElement || this.isSeeking) return;
 
-    const progress = calculateProgress(this.audioElement.currentTime, this.audioElement.duration);
+    const duration = this._getSeekDuration();
+    const progress = calculateProgress(this.audioElement.currentTime, duration);
     this._updateProgressUI(progress, this.audioElement.currentTime);
 
     State.updateAudioState({
@@ -610,18 +640,39 @@ const AudioPlayer = {
     if (!this.audioElement) return;
 
     const durationEl = $('#duration', this.container);
+    const duration = this._getSeekDuration();
     if (durationEl) {
-      durationEl.textContent = formatDuration(this.audioElement.duration);
+      durationEl.textContent = formatDuration(duration);
     }
+    this._syncTimeWidths();
 
 
     if (this.currentSurah?.verses?.length) {
-      this._renderVerseMarkers(this.currentSurah.verses, this.audioElement.duration);
+      this._renderVerseMarkers(this.currentSurah.verses, duration);
     }
 
     State.updateAudioState({
-      duration: this.audioElement.duration
+      duration
     });
+  },
+
+  _getSeekDuration() {
+    if (!this.audioElement) return 0;
+    const duration = this.audioElement.duration;
+    if (Number.isFinite(duration) && duration > 0) return duration;
+    const seekable = this.audioElement.seekable;
+    if (seekable && seekable.length) {
+      const end = seekable.end(seekable.length - 1);
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+    const buffered = this.audioElement.buffered;
+    if (buffered && buffered.length) {
+      const end = buffered.end(buffered.length - 1);
+      if (Number.isFinite(end) && end > 0) return end;
+    }
+    const stateDuration = State.get('audioState')?.duration;
+    if (Number.isFinite(stateDuration) && stateDuration > 0) return stateDuration;
+    return 0;
   },
 
   /**
@@ -653,14 +704,19 @@ const AudioPlayer = {
 
   /**
    * Update verse info display
-   * @param {number} verseIndex - Current verse index
+   * @param {number|number[]} verseIndex - Current verse index or indices
    * @param {Object} surah - Current surah
    */
   updateVerseInfo(verseIndex, surah) {
     const verseInfo = $('#verse-info', this.container);
-    if (verseIndex < 0 || !surah) return;
+    if (!surah) return;
 
-    const verse = surah.verses[verseIndex];
+    const index = Array.isArray(verseIndex)
+      ? (verseIndex.length ? verseIndex[0] : -1)
+      : verseIndex;
+    if (index < 0) return;
+
+    const verse = surah.verses[index];
     if (verse) {
       const verseText = `ئایەتی ${toKurdishNumber(verse.number)} لە ${toKurdishNumber(surah.verseCount)}`;
       if (verseInfo) {
@@ -724,6 +780,7 @@ const AudioPlayer = {
     if (this.audioElement) {
       this.audioElement.currentTime = 0;
     }
+    this._revokeBlobUrl();
     this.currentSurah = null;
 
     this._setBarVisible(false);
@@ -739,8 +796,67 @@ const AudioPlayer = {
 
     State.updateAudioState({
       playing: false,
-      currentTime: 0
+      currentTime: 0,
+      loaded: false,
+      surahId: null
     });
+  },
+
+  async _setAudioSource(audioUrl) {
+    if (!this.audioElement) return;
+    const token = ++this._sourceToken;
+    this._revokeBlobUrl();
+
+    const isLocal = this._isLocalAudio(audioUrl);
+    this.audioElement.preload = isLocal ? 'auto' : 'metadata';
+
+    const setSource = (src) => {
+      if (token !== this._sourceToken) return;
+      this.audioElement.src = src;
+      this.audioElement.load();
+    };
+
+    if (isLocal) {
+      try {
+        const response = await fetch(encodeURI(audioUrl));
+        if (!response.ok) {
+          throw new Error(`Failed to load audio: ${response.status}`);
+        }
+        const buffer = await response.arrayBuffer();
+        if (token !== this._sourceToken) return;
+        const blob = new Blob([buffer], { type: 'audio/mpeg' });
+        this._blobUrl = URL.createObjectURL(blob);
+        setSource(this._blobUrl);
+      } catch (error) {
+        console.warn('Falling back to direct audio src:', error);
+        setSource(audioUrl);
+      }
+    } else {
+      setSource(audioUrl);
+    }
+
+    await this._waitForMetadata();
+  },
+
+  _waitForMetadata() {
+    return new Promise((resolve) => {
+      if (!this.audioElement) return resolve();
+      const duration = this.audioElement.duration;
+      if (Number.isFinite(duration) && duration > 0) return resolve();
+      const onLoaded = () => resolve();
+      this.audioElement.addEventListener('loadedmetadata', onLoaded, { once: true });
+    });
+  },
+
+  _revokeBlobUrl() {
+    if (this._blobUrl) {
+      URL.revokeObjectURL(this._blobUrl);
+      this._blobUrl = null;
+    }
+  },
+
+  _isLocalAudio(audioUrl) {
+    return !/^https?:\/\//i.test(audioUrl);
   },
 
   _setBarVisible(visible) {

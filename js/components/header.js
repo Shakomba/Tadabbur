@@ -20,6 +20,7 @@ const Header = {
     this.container = container;
     this.render();
     this._setupEventListeners();
+    this._toggleMobileMenu(false);
 
     // Subscribe to route changes to update active tab
     State.subscribe('currentRoute', () => this._updateActiveTab());

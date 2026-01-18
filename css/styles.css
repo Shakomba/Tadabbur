@@ -105,6 +105,92 @@ body {
   box-shadow: 0 6px 18px rgba(6, 78, 59, 0.12);
 }
 
+/* ===== Lecture Accordions ===== */
+.lecture-accordion {
+  transition: transform 0.25s ease;
+}
+
+.lecture-header {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(250, 246, 240, 0.9));
+  border: 1px solid rgba(6, 78, 59, 0.08);
+  box-shadow: 0 12px 28px rgba(6, 78, 59, 0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.lecture-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 4px;
+  background: #d4a956;
+  opacity: 0.7;
+  transition: opacity 0.25s ease;
+}
+
+.lecture-accordion:hover .lecture-header {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(6, 78, 59, 0.12);
+}
+
+.lecture-accordion.is-open .lecture-header::before {
+  opacity: 0.9;
+}
+
+.lecture-title {
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.lecture-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(6, 78, 59, 0.08);
+  color: #065f46;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.lecture-header {
+  cursor: pointer;
+}
+
+ 
+
+.lecture-play {
+  box-shadow: 0 8px 18px rgba(212, 169, 86, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lecture-play:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 22px rgba(212, 169, 86, 0.45);
+}
+
+.lecture-body {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.25s ease;
+  will-change: max-height, opacity, transform;
+}
+
+.lecture-accordion.is-open .lecture-body {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.lecture-body-inner {
+  padding-top: 1rem;
+}
+
 /* ===== 3D Book Card ===== */
 .book-card {
   perspective: 1000px;
@@ -170,10 +256,24 @@ body {
 .progress-track {
   cursor: pointer;
   touch-action: none;
+  position: relative;
+}
+
+.progress-track::before {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
 }
 
 .progress-fill {
   transition: width 0.1s linear;
+}
+
+.audio-time {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
 }
 
 .progress-handle {
@@ -417,22 +517,30 @@ body {
 /* ===== Mobile Menu ===== */
 .mobile-menu {
   transform: translateX(100%);
-  transition: transform 0.3s ease;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.3s ease, opacity 0.2s ease, visibility 0.2s ease;
 }
 
 .mobile-menu.open {
   transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .mobile-menu-overlay {
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transition: all 0.3s ease;
 }
 
 .mobile-menu-overlay.open {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
 /* ===== Coming Soon Badge ===== */
@@ -538,51 +646,41 @@ body {
   width: 2px;
   cursor: pointer;
   z-index: 10;
-  transform: translateX(50%);
+  transform: translateX(-50%);
+  pointer-events: auto;
 }
 
 .verse-marker-line {
   width: 100%;
   height: 100%;
-  background: rgba(250, 246, 240, 0.4);
+  background: rgba(212, 169, 86, 0.55);
   transition: all 0.15s ease;
 }
 
 .verse-marker:hover .verse-marker-line {
   background: #d4a956;
-  width: 3px;
-  margin-left: -0.5px;
+  width: 100%;
+  margin-left: 0;
 }
 
-/* Verse Marker Tooltip */
 .verse-marker-tooltip {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
   background: #022c22;
   color: white;
-  font-size: 0.75rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: 0.5rem;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.4rem;
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.2s ease;
+  transition: opacity 0.15s ease;
   pointer-events: none;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(212, 169, 86, 0.3);
+  border: 1px solid rgba(212, 169, 86, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   z-index: 20;
-}
-
-.verse-marker-tooltip-arrow {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: -1px;
-  border: 6px solid transparent;
-  border-top-color: #022c22;
 }
 
 .verse-marker:hover .verse-marker-tooltip {

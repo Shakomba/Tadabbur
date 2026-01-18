@@ -2,6 +2,32 @@
  * Audio Synchronization Utilities
  */
 
+const parseStartTime = (value) => {
+  if (!Number.isFinite(value)) return null;
+  if (value === 0) return 0;
+  const minutes = Math.trunc(value);
+  const fractional = value - minutes;
+  const seconds = Math.round(fractional * 100);
+  return (minutes * 60) + seconds;
+};
+
+const getValidTimings = (verses) => {
+  const starts = verses.map((verse) => parseStartTime(verse.startTime));
+  const hasPositiveStart = starts.some((start) => Number.isFinite(start) && start > 0);
+  if (!hasPositiveStart) return [];
+
+  const allowZeroStart = starts[0] === 0 && starts.slice(1).some((start) => Number.isFinite(start) && start > 0);
+
+  const timings = [];
+  starts.forEach((start, index) => {
+    if (!Number.isFinite(start)) return;
+    if (start === 0 && !(allowZeroStart && index === 0)) return;
+    timings.push({ index, start });
+  });
+
+  return timings;
+};
+
 /**
  * Audio sync manager for verse highlighting
  */
@@ -10,7 +36,7 @@ export const AudioSync = {
   _verses: [],
   _onVerseChange: null,
   _animationFrame: null,
-  _lastVerseIndex: -1,
+  _lastVerseKey: '',
 
   /**
    * Initialize audio sync with verses
@@ -22,7 +48,7 @@ export const AudioSync = {
     this._audioElement = audioElement;
     this._verses = verses;
     this._onVerseChange = onVerseChange;
-    this._lastVerseIndex = -1;
+    this._lastVerseKey = '';
 
     // Set up event listeners
     this._setupListeners();
@@ -41,53 +67,47 @@ export const AudioSync = {
   },
 
   /**
+   * Find active verse indices based on current time
+   * @param {number} currentTime - Current playback time in seconds
+   * @returns {number[]} Active verse indices
+   */
+  findActiveVerseIndices(currentTime) {
+    const timings = getValidTimings(this._verses);
+    if (!timings.length) return [];
+
+    const starts = timings
+      .map((timing) => timing.start)
+      .sort((a, b) => a - b);
+
+    const uniqueStarts = [];
+    starts.forEach((start) => {
+      if (uniqueStarts[uniqueStarts.length - 1] !== start) {
+        uniqueStarts.push(start);
+      }
+    });
+
+    if (!uniqueStarts.length || currentTime < uniqueStarts[0]) return [];
+
+    let activeStart = uniqueStarts[0];
+    uniqueStarts.forEach((start) => {
+      if (currentTime >= start) {
+        activeStart = start;
+      }
+    });
+
+    return timings
+      .filter((timing) => timing.start === activeStart)
+      .map((timing) => timing.index);
+  },
+
+  /**
    * Find the active verse index based on current time
    * @param {number} currentTime - Current playback time in seconds
    * @returns {number} Index of active verse, or -1 if none
    */
   findActiveVerseIndex(currentTime) {
-    const hasTiming = this._verses.some((verse) => {
-      const start = Number.isFinite(verse.audioTimestamp) ? verse.audioTimestamp : verse.startTime;
-      const end = Number.isFinite(verse.audioEndTimestamp) ? verse.audioEndTimestamp : verse.endTime;
-      return Number.isFinite(start) && (start > 0 || Number.isFinite(end));
-    });
-    if (!hasTiming) return -1;
-
-    let lastTimedIndex = -1;
-    for (let i = 0; i < this._verses.length; i++) {
-      const verse = this._verses[i];
-      const start = Number.isFinite(verse.audioTimestamp) ? verse.audioTimestamp : verse.startTime;
-      let end = Number.isFinite(verse.audioEndTimestamp) ? verse.audioEndTimestamp : verse.endTime;
-      if (!Number.isFinite(start)) {
-        continue;
-      }
-      if (!Number.isFinite(end) || end <= start) {
-        const nextVerse = this._verses[i + 1];
-        const nextStart = nextVerse
-          ? (Number.isFinite(nextVerse.audioTimestamp) ? nextVerse.audioTimestamp : nextVerse.startTime)
-          : null;
-        if (Number.isFinite(nextStart) && nextStart > start) {
-          end = nextStart;
-        }
-      }
-
-      lastTimedIndex = i;
-      if (Number.isFinite(end) && end > start && currentTime >= start && currentTime < end) {
-        return i;
-      }
-    }
-
-    // If past all timed verses, return the last timed one
-    if (lastTimedIndex >= 0) {
-      const lastStart = Number.isFinite(this._verses[lastTimedIndex].audioTimestamp)
-        ? this._verses[lastTimedIndex].audioTimestamp
-        : this._verses[lastTimedIndex].startTime;
-      if (Number.isFinite(lastStart) && currentTime >= lastStart) {
-        return lastTimedIndex;
-      }
-    }
-
-    return -1;
+    const indices = this.findActiveVerseIndices(currentTime);
+    return indices.length ? indices[0] : -1;
   },
 
   /**
@@ -96,12 +116,13 @@ export const AudioSync = {
   _checkSync() {
     if (!this._audioElement || !this._verses.length) return;
 
-    const currentIndex = this.findActiveVerseIndex(this._audioElement.currentTime);
+    const currentIndices = this.findActiveVerseIndices(this._audioElement.currentTime);
+    const currentKey = currentIndices.length ? currentIndices.join(',') : '';
 
-    if (currentIndex !== this._lastVerseIndex) {
-      this._lastVerseIndex = currentIndex;
+    if (currentKey !== this._lastVerseKey) {
+      this._lastVerseKey = currentKey;
       if (this._onVerseChange) {
-        this._onVerseChange(currentIndex);
+        this._onVerseChange(currentIndices);
       }
     }
   },
@@ -138,11 +159,9 @@ export const AudioSync = {
       return;
     }
 
-    const verse = this._verses[verseIndex];
-    const start = Number.isFinite(verse.audioTimestamp) ? verse.audioTimestamp : verse.startTime;
-    if (Number.isFinite(start)) {
-      this._audioElement.currentTime = start;
-    }
+    const timing = getValidTimings(this._verses).find((entry) => entry.index === verseIndex);
+    if (!timing) return;
+    this._audioElement.currentTime = timing.start;
   },
 
   /**
@@ -154,9 +173,8 @@ export const AudioSync = {
     if (verseIndex < 0 || verseIndex >= this._verses.length) {
       return 0;
     }
-    const verse = this._verses[verseIndex];
-    const timestamp = Number.isFinite(verse.audioTimestamp) ? verse.audioTimestamp : verse.startTime;
-    return Number.isFinite(timestamp) ? timestamp : 0;
+    const timing = getValidTimings(this._verses).find((entry) => entry.index === verseIndex);
+    return timing ? timing.start : NaN;
   },
 
   /**
@@ -165,7 +183,7 @@ export const AudioSync = {
    */
   updateVerses(verses) {
     this._verses = verses;
-    this._lastVerseIndex = -1;
+    this._lastVerseKey = '';
   },
 
   /**
@@ -176,7 +194,7 @@ export const AudioSync = {
     this._audioElement = null;
     this._verses = [];
     this._onVerseChange = null;
-    this._lastVerseIndex = -1;
+    this._lastVerseKey = '';
   }
 };
 
@@ -189,23 +207,14 @@ export const AudioSync = {
 export function getVerseMarkers(verses, totalDuration) {
   if (!verses || !totalDuration) return [];
 
-  const hasTiming = verses.some((verse) => {
-    const timestamp = Number.isFinite(verse.audioTimestamp) ? verse.audioTimestamp : verse.startTime;
-    return Number.isFinite(timestamp) && timestamp > 0;
-  });
-  if (!hasTiming) return [];
+  const timings = getValidTimings(verses);
+  if (!timings.length) return [];
 
-  const markers = [];
-  verses.forEach((verse, index) => {
-    const timestamp = Number.isFinite(verse.audioTimestamp) ? verse.audioTimestamp : verse.startTime;
-    if (!Number.isFinite(timestamp)) return;
-    markers.push({
-      index,
-      position: (timestamp / totalDuration) * 100,
-      verseNumber: verse.number ?? verse.numberInSurah ?? index + 1
-    });
-  });
-  return markers;
+  return timings.map((timing) => ({
+    index: timing.index,
+    position: (timing.start / totalDuration) * 100,
+    verseNumber: verses[timing.index].number ?? verses[timing.index].numberInSurah ?? timing.index + 1
+  }));
 }
 
 /**

@@ -52,9 +52,14 @@ const ReadingViewPage = {
     // Render page
     this.render();
 
+    this.unsubscribers.push(
+      State.subscribe('audioState', (state) => this._onAudioStateChange(state))
+    );
+
     if (this.hasLectures) {
       this._setupLectureHandlers();
     } else {
+      this._setupVerseClickHandlers();
       // Load audio and set up sync
       this._setupAudio();
     }
@@ -109,9 +114,6 @@ const ReadingViewPage = {
         </div>
       </div>
     `;
-
-    // Set up verse click handlers
-    this._setupVerseClickHandlers();
   },
 
   /**
@@ -180,18 +182,27 @@ const ReadingViewPage = {
 
       return `
         <div class="lecture-accordion mb-4 last:mb-0" data-lecture-id="${lectureId}">
-          <div class="lecture-header flex items-center justify-between gap-3 p-4 rounded-xl bg-white/70 border border-cream-200">
-            <button class="lecture-toggle flex-1 text-right" data-lecture-toggle="${lectureId}" aria-expanded="false">
-              <div class="text-emerald-900 font-bold">${title}</div>
-              <div class="text-emerald-600 text-sm mt-1">${rangeLabel}</div>
-            </button>
-            <button class="lecture-play w-10 h-10 bg-gold-400 hover:bg-gold-300 rounded-full flex items-center justify-center transition-colors"
-                    data-lecture-play="${lectureId}" title="${strings.listenNow || 'گوشبکە'}" aria-label="Play lecture">
-              ${icon('play', 'w-5 h-5 text-emerald-900')}
-            </button>
+          <div class="lecture-header flex items-center justify-between gap-3 p-4 rounded-2xl w-full text-right"
+               data-lecture-toggle="${lectureId}" aria-expanded="false">
+            <div class="flex-1 min-w-0">
+              <div class="lecture-title-row flex items-center justify-between gap-3">
+                <span class="lecture-title text-emerald-900 font-bold">${title}</span>
+              </div>
+              <div class="lecture-meta mt-2">
+                <span class="lecture-range">${rangeLabel}</span>
+              </div>
+            </div>
+            <div class="lecture-actions flex items-center">
+              <button class="lecture-play w-11 h-11 bg-gold-400 hover:bg-gold-300 rounded-full flex items-center justify-center transition-colors"
+                      data-lecture-play="${lectureId}" title="${strings.listenNow || 'گوشبکە'}" aria-label="Play lecture" type="button">
+                ${icon('play', 'w-5 h-5 text-emerald-900')}
+              </button>
+            </div>
           </div>
-          <div class="lecture-body hidden pt-4" data-lecture-body="${lectureId}">
-            ${verses.map((verse, verseIndex) => this._renderLectureVerse(verse, verseIndex, lectureId)).join('')}
+          <div class="lecture-body" data-lecture-body="${lectureId}">
+            <div class="lecture-body-inner">
+              ${verses.map((verse, verseIndex) => this._renderLectureVerse(verse, verseIndex, lectureId)).join('')}
+            </div>
           </div>
         </div>
       `;
@@ -261,7 +272,8 @@ const ReadingViewPage = {
   _setupVerseClickHandlers() {
     const verses = this.container.querySelectorAll('.verse-item');
     verses.forEach(verse => {
-      verse.addEventListener('click', () => {
+      verse.addEventListener('click', (event) => {
+        event.stopPropagation();
         if (verse.classList.contains('verse-disabled')) return;
         const index = parseInt(verse.dataset.verseIndex, 10);
         const lectureId = verse.dataset.lectureId || null;
@@ -272,14 +284,6 @@ const ReadingViewPage = {
   },
 
   _setupLectureHandlers() {
-    const toggles = this.container.querySelectorAll('[data-lecture-toggle]');
-    toggles.forEach(toggle => {
-      toggle.addEventListener('click', () => {
-        const lectureId = toggle.dataset.lectureToggle;
-        this._toggleLecture(lectureId);
-      });
-    });
-
     const plays = this.container.querySelectorAll('[data-lecture-play]');
     plays.forEach(playButton => {
       playButton.addEventListener('click', (e) => {
@@ -287,6 +291,19 @@ const ReadingViewPage = {
         const lectureId = playButton.dataset.lecturePlay;
         this._playLecture(lectureId);
       });
+    });
+
+    const accordions = this.container.querySelectorAll('.lecture-accordion');
+    accordions.forEach(accordion => {
+      accordion.addEventListener('click', (event) => {
+        if (event.target.closest('[data-lecture-play]')) return;
+        const lectureId = accordion.dataset.lectureId;
+        this._toggleLecture(lectureId);
+      });
+    });
+
+    this.container.querySelectorAll('[data-lecture-body]').forEach((body) => {
+      body.style.maxHeight = '0px';
     });
 
     this._setupVerseClickHandlers();
@@ -299,7 +316,11 @@ const ReadingViewPage = {
     const toggle = accordion.querySelector(`[data-lecture-toggle="${lectureId}"]`);
     const isOpen = accordion.classList.toggle('is-open');
     if (body) {
-      body.classList.toggle('hidden', !isOpen);
+      if (isOpen) {
+        body.style.maxHeight = `${body.scrollHeight}px`;
+      } else {
+        body.style.maxHeight = '0px';
+      }
     }
     if (toggle) {
       toggle.setAttribute('aria-expanded', String(isOpen));
@@ -312,7 +333,9 @@ const ReadingViewPage = {
     accordion.classList.add('is-open');
     const body = accordion.querySelector(`[data-lecture-body="${lectureId}"]`);
     const toggle = accordion.querySelector(`[data-lecture-toggle="${lectureId}"]`);
-    if (body) body.classList.remove('hidden');
+    if (body) {
+      body.style.maxHeight = `${body.scrollHeight}px`;
+    }
     if (toggle) toggle.setAttribute('aria-expanded', 'true');
   },
 
@@ -359,12 +382,31 @@ const ReadingViewPage = {
     };
   },
 
+  _onAudioStateChange(state) {
+    if (!this.hasLectures) return;
+    if (!state.loaded && !state.playing) {
+      this._resetLectureState();
+    }
+  },
+
+  _resetLectureState() {
+    this.currentVerseIndex = -1;
+    this.activeLectureSurah = null;
+    this._setActiveLecture(null);
+    this.container.querySelectorAll('.verse-item.highlighted').forEach((element) => {
+      element.classList.remove('highlighted');
+    });
+  },
+
   /**
    * Handle verse change from audio sync
-   * @param {number} verseIndex - New verse index
+   * @param {number|number[]} verseIndex - New verse index or indices
    */
   _onVerseChange(verseIndex) {
-    if (verseIndex === this.currentVerseIndex && !this.hasLectures) return;
+    const indices = Array.isArray(verseIndex)
+      ? verseIndex.filter((index) => Number.isInteger(index) && index >= 0)
+      : (Number.isInteger(verseIndex) && verseIndex >= 0 ? [verseIndex] : []);
+    const nextIndex = indices.length ? indices[0] : -1;
 
     if (this.hasLectures) {
       if (!this.activeLectureId || !this.activeLectureSurah) return;
@@ -373,47 +415,55 @@ const ReadingViewPage = {
         element.classList.remove('highlighted');
       });
 
-      if (verseIndex >= 0) {
-        const selector = `.verse-item[data-lecture-id="${this.activeLectureId}"][data-verse-index="${verseIndex}"]`;
+      let firstVerse = null;
+      indices.forEach((index) => {
+        const selector = `.verse-item[data-lecture-id="${this.activeLectureId}"][data-verse-index="${index}"]`;
         const newVerse = this.container.querySelector(selector);
         if (newVerse) {
           newVerse.classList.add('highlighted');
-          this._scrollToVerse(newVerse);
+          if (!firstVerse) {
+            firstVerse = newVerse;
+          }
         }
+      });
+
+      if (firstVerse) {
+        this._scrollToVerse(firstVerse);
       }
 
-      this.currentVerseIndex = verseIndex;
-      State.set('currentVerseIndex', verseIndex);
-      AudioPlayer.updateVerseInfo(verseIndex, this.activeLectureSurah);
+      this.currentVerseIndex = nextIndex;
+      State.set('currentVerseIndex', nextIndex);
+      if (nextIndex >= 0) {
+        AudioPlayer.updateVerseInfo(nextIndex, this.activeLectureSurah);
+      }
       return;
     }
 
-    if (verseIndex === this.currentVerseIndex) return;
+    this.container.querySelectorAll('.verse-item.highlighted').forEach((element) => {
+      element.classList.remove('highlighted');
+    });
 
-    // Remove highlight from previous verse
-    if (this.currentVerseIndex >= 0) {
-      const prevVerse = $(`#verse-${this.currentVerseIndex}`, this.container);
-      if (prevVerse) {
-        prevVerse.classList.remove('highlighted');
-      }
-    }
-
-    // Highlight new verse
-    if (verseIndex >= 0) {
-      const newVerse = $(`#verse-${verseIndex}`, this.container);
+    let firstVerse = null;
+    indices.forEach((index) => {
+      const newVerse = $(`#verse-${index}`, this.container);
       if (newVerse) {
         newVerse.classList.add('highlighted');
-
-        // Auto-scroll to verse
-        this._scrollToVerse(newVerse);
+        if (!firstVerse) {
+          firstVerse = newVerse;
+        }
       }
+    });
+
+    if (firstVerse) {
+      this._scrollToVerse(firstVerse);
     }
 
-    this.currentVerseIndex = verseIndex;
-    State.set('currentVerseIndex', verseIndex);
+    this.currentVerseIndex = nextIndex;
+    State.set('currentVerseIndex', nextIndex);
 
-    // Update audio player verse info
-    AudioPlayer.updateVerseInfo(verseIndex, this.surah);
+    if (nextIndex >= 0) {
+      AudioPlayer.updateVerseInfo(nextIndex, this.surah);
+    }
   },
 
   /**
