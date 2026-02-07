@@ -51,6 +51,39 @@ export function formatDurationStandard(seconds) {
 }
 
 /**
+ * Format duration in H:MM:SS or MM:SS format (smart)
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} Formatted duration with LTR wrapper
+ */
+export function formatSmartDuration(seconds) {
+  const numeric = typeof seconds === 'string' ? Number(seconds) : seconds;
+  if (!Number.isFinite(numeric)) {
+    return '<span dir="ltr" class="duration-time">00:00</span>';
+  }
+
+  const normalized = Number.isInteger(numeric)
+    ? (numeric < 120 ? numeric * 60 : numeric)
+    : (() => {
+        const minutes = Math.trunc(numeric);
+        const secs = Math.round((numeric - minutes) * 100);
+        return (minutes * 60) + secs;
+      })();
+
+  const hours = Math.floor(normalized / 3600);
+  const mins = Math.floor((normalized % 3600) / 60);
+  const secs = Math.floor(normalized % 60);
+
+  let formatted;
+  if (hours > 0) {
+    formatted = `${hours}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  } else {
+    formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  return `<span dir="ltr" class="duration-time">${formatted}</span>`;
+}
+
+/**
  * Format playback speed for display
  * @param {number} speed - Playback speed (0.5 to 2)
  * @returns {string} Formatted speed string

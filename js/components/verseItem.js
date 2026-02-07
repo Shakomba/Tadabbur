@@ -14,7 +14,7 @@ const VerseItem = {
    */
   create(verse, index, isHighlighted = false) {
     const element = document.createElement('div');
-    element.className = `verse-item p-4 md:p-6 rounded-xl cursor-pointer mb-4 last:mb-0 ${isHighlighted ? 'highlighted' : ''}`;
+    element.className = `verse-item p-5 md:p-7 rounded-xl cursor-pointer mb-4 last:mb-0 ${isHighlighted ? 'highlighted' : ''}`;
     element.dataset.verseIndex = index;
     element.id = `verse-${index}`;
 
@@ -29,7 +29,7 @@ const VerseItem = {
 
         <div class="flex-1 min-w-0">
           <!-- Arabic Text -->
-          <p class="quran-text text-quran-lg md:text-quran-xl text-gray-900 mb-4 leading-loose">
+          <p class="quran-text text-quran-lg md:text-quran-xl text-gray-900 mt-1 mb-6 leading-loose">
             ${verse.textUthmani || verse.textArabic}
           </p>
 
@@ -53,7 +53,7 @@ const VerseItem = {
    */
   createHTML(verse, index, isHighlighted = false) {
     return `
-      <div class="verse-item p-4 md:p-6 rounded-xl cursor-pointer mb-4 last:mb-0 ${isHighlighted ? 'highlighted' : ''}"
+      <div class="verse-item p-5 md:p-7 rounded-xl cursor-pointer mb-4 last:mb-0 ${isHighlighted ? 'highlighted' : ''}"
            data-verse-index="${index}"
            id="verse-${index}">
         <div class="flex items-start gap-4">
@@ -66,7 +66,7 @@ const VerseItem = {
 
           <div class="flex-1 min-w-0">
             <!-- Arabic Text -->
-            <p class="quran-text text-quran-lg md:text-quran-xl text-gray-900 mb-4 leading-loose">
+            <p class="quran-text text-quran-lg md:text-quran-xl text-gray-900 mt-1 mb-6 leading-loose">
               ${verse.textUthmani || verse.textArabic}
             </p>
 

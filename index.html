@@ -13,6 +13,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Vazirmatn:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+  <!-- Preload critical fonts -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap">
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -60,6 +64,7 @@
 <body class="min-h-screen flex flex-col bg-cream-50 font-kurdish text-gray-900">
   <header id="header" class="sticky top-0 z-50"></header>
   <main id="app-content" class="flex-1"></main>
+  <footer id="footer"></footer>
   <div id="audio-player"></div>
   <audio id="audio-element" preload="metadata"></audio>
 

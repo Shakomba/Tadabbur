@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir /s \"d:\\\\Project\\\\Tadabur\")"
+      "Bash(dir /s \"d:\\\\Project\\\\Tadabur\")",
+      "Bash(powershell -Command:*)",
+      "Bash(python:*)"
     ]
   }
 }

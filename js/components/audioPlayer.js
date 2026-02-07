@@ -20,6 +20,10 @@ const AudioPlayer = {
   swipeCurrentY: 0,
   lastSnapIndex: null,
   markers: [],
+  markerElements: new Map(),
+  activeMarkerIndex: null,
+  markerTooltipTimeout: null,
+  lastVolume: 1,
   _blobUrl: null,
   _sourceToken: 0,
   _sourcePromise: null,
@@ -63,7 +67,7 @@ const AudioPlayer = {
           </div>
           <div class="max-w-7xl mx-auto">
           <!-- Top Row: Progress Bar with Times -->
-          <div class="flex items-center gap-3 mb-2">
+          <div class="audio-progress-row flex items-center gap-3 mb-2">
             <!-- Duration (Left) -->
             <span class="audio-time text-emerald-300 text-sm tabular-nums shrink-0" id="duration">٠٠:٠٠</span>
 
@@ -83,64 +87,76 @@ const AudioPlayer = {
           <!-- Bottom Row: Controls & Info -->
           <div class="flex items-center justify-between gap-4">
             <!-- Left: Surah Info -->
-            <div class="flex items-center gap-2 flex-1">
-              <button id="close-btn-mobile" class="w-8 h-8 bg-emerald-800 rounded-lg flex items-center
-                                                   justify-center shrink-0 text-gold-400 hover:bg-emerald-700
-                                                   transition-colors md:hidden"
-                      title="Close" aria-label="Close player">
-                ${icon('close', 'w-4 h-4')}
-              </button>
-              <div class="w-8 h-8 bg-emerald-800 rounded-lg hidden md:flex items-center justify-center shrink-0">
-                ${icon('volume', 'w-4 h-4 text-gold-400')}
+            <div class="audio-left-controls flex items-center gap-3 flex-1">
+              <div class="audio-left-slot">
+                <button id="close-btn-mobile" class="w-8 h-8 bg-emerald-800 rounded-lg flex items-center
+                                                     justify-center shrink-0 text-gold-400 hover:bg-emerald-700
+                                                     transition-colors md:hidden"
+                        title="Close" aria-label="Close player">
+                  ${icon('close', 'w-4 h-4')}
+                </button>
+                <div class="volume-control hidden md:flex items-center relative shrink-0">
+                  <button id="volume-btn" class="w-8 h-8 bg-emerald-800 rounded-lg flex items-center justify-center text-gold-400 hover:bg-emerald-700 transition-colors"
+                          title="Mute" aria-label="Mute audio" type="button">
+                    <span class="volume-icon">${icon('volume', 'w-4 h-4')}</span>
+                    <span class="volume-mute-icon hidden">${icon('volumeMute', 'w-4 h-4')}</span>
+                  </button>
+                  <div class="volume-panel" aria-hidden="true">
+                    <input id="volume-range" class="volume-slider" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume" />
+                  </div>
+                </div>
               </div>
               <div class="hidden md:block min-w-0 max-w-[200px]">
-                <div class="text-white text-sm font-medium truncate" id="surah-name">—</div>
-                <div class="text-emerald-300 text-xs truncate" id="verse-info">—</div>
+                <div class="text-white text-sm font-medium truncate" id="surah-name">-</div>
+                <div class="text-emerald-300 text-xs truncate" id="verse-info">-</div>
               </div>
             </div>
 
             <!-- Center: Playback Controls -->
-            <div class="flex items-center gap-2 justify-center">
+            <div class="flex items-center gap-4 justify-center">
               <!-- Skip Forward -->
-              <button id="skip-forward" class="p-1.5 text-white hover:text-gold-400 transition-colors"
+              <button id="skip-forward" class="p-2 text-white hover:text-gold-400 transition-colors"
                       title="١٠ چرکە بۆ پێش">
                 <div class="relative">
-                  ${icon('skipForward', 'w-5 h-5')}
-                  <span class="absolute -bottom-1 -left-1 text-[10px] text-gold-400">١٠</span>
+                  ${icon('skipForward', 'w-6 h-6')}
+                  <span class="absolute -bottom-1 -left-1 text-[11px] text-gold-400">١٠</span>
                 </div>
               </button>
 
               <!-- Play/Pause -->
-              <button id="play-pause" class="w-10 h-10 bg-gold-500 hover:bg-gold-400 rounded-full
+              <button id="play-pause" class="w-12 h-12 bg-gold-500 hover:bg-gold-400 rounded-full
                                               flex items-center justify-center transition-colors">
-                <span id="play-icon">${icon('play', 'w-5 h-5 text-emerald-900')}</span>
-                <span id="pause-icon" class="hidden">${icon('pause', 'w-5 h-5 text-emerald-900')}</span>
+                <span id="play-icon">${icon('play', 'w-6 h-6 text-emerald-900')}</span>
+                <span id="pause-icon" class="hidden">${icon('pause', 'w-6 h-6 text-emerald-900')}</span>
               </button>
 
               <!-- Skip Backward -->
-              <button id="skip-backward" class="p-1.5 text-white hover:text-gold-400 transition-colors"
+              <button id="skip-backward" class="p-2 text-white hover:text-gold-400 transition-colors"
                       title="١٠ چرکە بۆ پاش">
                 <div class="relative">
-                  ${icon('skipBackward', 'w-5 h-5')}
-                  <span class="absolute -bottom-1 -right-1 text-[10px] text-gold-400">١٠</span>
+                  ${icon('skipBackward', 'w-6 h-6')}
+                  <span class="absolute -bottom-1 -right-1 text-[11px] text-gold-400">١٠</span>
                 </div>
               </button>
 
             </div>
 
             <!-- Right: Speed Control -->
-            <div class="flex items-center flex-1 justify-end">
-              <div class="speed-dropdown relative">
-                <button id="speed-btn" class="px-2 py-1 bg-emerald-800 rounded-lg text-gold-400
-                                              hover:bg-emerald-700 transition-colors text-xs font-medium">
-                  <span id="speed-value">١x</span>
-                </button>
-                <div class="speed-options" id="speed-options">
-                  ${this.speedOptions.map(speed => `
-                    <div class="speed-option ${speed === 1 ? 'active' : ''}" data-speed="${speed}">
-                      ${speed}x
-                    </div>
-                  `).join('')}
+            <div class="audio-right-controls flex items-center flex-1 justify-end">
+              <div class="audio-right-slot">
+                <div class="speed-dropdown relative">
+                  <button id="speed-btn" class="w-8 h-8 bg-emerald-800 rounded-lg text-gold-400
+                                                hover:bg-emerald-700 transition-colors text-xs font-medium
+                                                flex items-center justify-center">
+                    <span id="speed-value">١x</span>
+                  </button>
+                  <div class="speed-options" id="speed-options">
+                    ${this.speedOptions.map(speed => `
+                      <div class="speed-option ${speed === 1 ? 'active' : ''}" data-speed="${speed}">
+                        ${speed}x
+                      </div>
+                    `).join('')}
+                  </div>
                 </div>
               </div>
             </div>
@@ -193,10 +209,28 @@ const AudioPlayer = {
       this._updatePlayState(false);
     });
 
+    // Loading state events
+    this.audioElement.addEventListener('waiting', () => {
+      this._updateLoadingState(true);
+    });
+
+    this.audioElement.addEventListener('playing', () => {
+      this._updateLoadingState(false);
+    });
+
+    this.audioElement.addEventListener('canplay', () => {
+      this._updateLoadingState(false);
+    });
+
     // Play/Pause button
     const playPauseBtn = $('#play-pause', this.container);
     if (playPauseBtn) {
-      playPauseBtn.addEventListener('click', () => this.togglePlay());
+      playPauseBtn.addEventListener('click', () => {
+        if (window.matchMedia('(max-width: 768px)').matches) {
+          this._hapticTick(6);
+        }
+        this.togglePlay();
+      });
     }
 
     // Skip buttons
@@ -210,6 +244,72 @@ const AudioPlayer = {
       skipBackward.addEventListener('click', () => this.skip(-10));
     }
 
+    const volumeBtn = $('#volume-btn', this.container);
+    const volumeRange = $('#volume-range', this.container);
+    if (volumeRange) {
+      const initialVolume = Number.isFinite(this.audioElement?.volume) ? this.audioElement.volume : 1;
+      volumeRange.value = String(initialVolume);
+      this.lastVolume = initialVolume || this.lastVolume || 1;
+      volumeRange.addEventListener('input', () => {
+        if (!this.audioElement) return;
+        const nextVolume = Math.max(0, Math.min(1, parseFloat(volumeRange.value)));
+        this.audioElement.volume = nextVolume;
+        this.audioElement.muted = nextVolume === 0;
+        if (nextVolume > 0) {
+          this.lastVolume = nextVolume;
+        }
+        this._updateVolumeUI();
+      });
+    }
+
+    const volumePanel = this.container.querySelector('.volume-panel');
+    const adjustVolume = (delta) => {
+      if (!this.audioElement || !volumeRange) return;
+      const current = Number.isFinite(this.audioElement.volume) ? this.audioElement.volume : 0;
+      const nextVolume = Math.max(0, Math.min(1, current + delta));
+      this.audioElement.volume = nextVolume;
+      this.audioElement.muted = nextVolume === 0;
+      if (nextVolume > 0) {
+        this.lastVolume = nextVolume;
+      }
+      volumeRange.value = String(nextVolume);
+      this._updateVolumeUI();
+    };
+
+    const handleVolumeWheel = (e) => {
+      e.preventDefault();
+      const step = 0.05;
+      const delta = e.deltaY < 0 ? step : -step;
+      adjustVolume(delta);
+    };
+
+    if (volumePanel) {
+      volumePanel.addEventListener('wheel', handleVolumeWheel, { passive: false });
+    }
+    if (volumeRange) {
+      volumeRange.addEventListener('wheel', handleVolumeWheel, { passive: false });
+    }
+
+    if (volumeBtn) {
+      volumeBtn.addEventListener('click', () => {
+        if (!this.audioElement) return;
+        const isMuted = this.audioElement.muted || this.audioElement.volume === 0;
+        if (isMuted) {
+          const restoreVolume = this.lastVolume || 1;
+          this.audioElement.muted = false;
+          this.audioElement.volume = restoreVolume;
+          if (volumeRange) volumeRange.value = String(restoreVolume);
+        } else {
+          this.lastVolume = this.audioElement.volume || this.lastVolume || 1;
+          this.audioElement.muted = true;
+          this.audioElement.volume = 0;
+          if (volumeRange) volumeRange.value = '0';
+        }
+        this._updateVolumeUI();
+      });
+    }
+    this._updateVolumeUI();
+
     // Progress bar seeking (drag anywhere)
     const progressTrack = $('#progress-track', this.container);
     if (progressTrack) {
@@ -217,6 +317,11 @@ const AudioPlayer = {
         if (e.button !== undefined && e.button !== 0) return;
         this.isSeeking = true;
         this.lastSnapIndex = null;
+        this._setActiveMarker(null);
+        if (this.markerTooltipTimeout) {
+          clearTimeout(this.markerTooltipTimeout);
+          this.markerTooltipTimeout = null;
+        }
         progressTrack.classList.add('is-dragging');
         document.body.style.userSelect = 'none';
         if (progressTrack.setPointerCapture) {
@@ -235,6 +340,7 @@ const AudioPlayer = {
         this.isSeeking = false;
         progressTrack.classList.remove('is-dragging');
         progressTrack.classList.remove('snap-active');
+        this._setActiveMarker(null);
         document.body.style.userSelect = '';
         if (progressTrack.hasPointerCapture &&
             progressTrack.hasPointerCapture(e.pointerId) &&
@@ -250,13 +356,27 @@ const AudioPlayer = {
     }
 
     // Speed control
+    const speedBtn = $('#speed-btn', this.container);
+    const speedOptionsEl = $('#speed-options', this.container);
     const speedOptions = this.container.querySelectorAll('.speed-option');
     speedOptions.forEach(option => {
       option.addEventListener('click', (e) => {
         const speed = parseFloat(e.target.dataset.speed);
         this.setSpeed(speed);
+        if (speedOptionsEl) {
+          speedOptionsEl.classList.remove('speed-options-visible');
+        }
       });
     });
+    if (speedBtn && speedOptionsEl) {
+      speedBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        speedOptionsEl.classList.toggle('speed-options-visible');
+      });
+      document.addEventListener('click', () => {
+        speedOptionsEl.classList.remove('speed-options-visible');
+      });
+    }
 
     const minimizeBtn = $('#minimize-btn', this.container);
     if (minimizeBtn) {
@@ -342,6 +462,8 @@ const AudioPlayer = {
     const markers = getVerseMarkers(verses, duration);
     this.markers = markers;
     this.lastSnapIndex = null;
+    this.markerElements = new Map();
+    this.activeMarkerIndex = null;
 
     container.innerHTML = markers.map(marker => `
       <div class="verse-marker"
@@ -359,12 +481,26 @@ const AudioPlayer = {
       marker.addEventListener('click', (e) => {
         e.stopPropagation();
         const verseIndex = parseInt(marker.dataset.verse, 10);
+        if (!Number.isInteger(verseIndex)) return;
+        this._setActiveMarker(verseIndex);
         const verseTime = AudioSync.getVerseTimestamp(verseIndex);
         if (!Number.isFinite(verseTime)) return;
         this.seekTo(verseTime);
         this._hapticTick(8);
         this.play();
+        if (this.markerTooltipTimeout) {
+          clearTimeout(this.markerTooltipTimeout);
+        }
+        this.markerTooltipTimeout = setTimeout(() => {
+          if (!this.isSeeking) {
+            this._setActiveMarker(null);
+          }
+        }, 1200);
       });
+      const verseIndex = parseInt(marker.dataset.verse, 10);
+      if (Number.isInteger(verseIndex)) {
+        this.markerElements.set(verseIndex, marker);
+      }
     });
   },
 
@@ -496,6 +632,48 @@ const AudioPlayer = {
     }
   },
 
+  _updateVolumeUI() {
+    if (!this.container || !this.audioElement) return;
+    const volumeControl = this.container.querySelector('.volume-control');
+    if (!volumeControl) return;
+    const isMuted = this.audioElement.muted || this.audioElement.volume === 0;
+    volumeControl.classList.toggle('is-muted', isMuted);
+
+    // Toggle volume icons
+    const volumeIcon = this.container.querySelector('.volume-icon');
+    const volumeMuteIcon = this.container.querySelector('.volume-mute-icon');
+    if (volumeIcon && volumeMuteIcon) {
+      volumeIcon.classList.toggle('hidden', isMuted);
+      volumeMuteIcon.classList.toggle('hidden', !isMuted);
+    }
+
+    const volumeBtn = $('#volume-btn', this.container);
+    if (volumeBtn) {
+      volumeBtn.setAttribute('aria-label', isMuted ? 'Unmute audio' : 'Mute audio');
+      volumeBtn.setAttribute('title', isMuted ? 'Unmute' : 'Mute');
+    }
+
+    const volumeRange = $('#volume-range', this.container);
+    if (volumeRange) {
+      const volumeValue = isMuted ? 0 : this.audioElement.volume;
+      volumeRange.style.setProperty('--volume-fill', `${Math.round(volumeValue * 100)}%`);
+    }
+  },
+
+  _setActiveMarker(index) {
+    if (this.activeMarkerIndex !== null) {
+      const prev = this.markerElements.get(this.activeMarkerIndex);
+      if (prev) prev.classList.remove('is-snap');
+    }
+    if (Number.isInteger(index)) {
+      const next = this.markerElements.get(index);
+      if (next) next.classList.add('is-snap');
+      this.activeMarkerIndex = index;
+    } else {
+      this.activeMarkerIndex = null;
+    }
+  },
+
   _getSnap(positionPx, trackWidth, duration) {
     if (!this.markers.length || !trackWidth || !duration) return null;
 
@@ -550,6 +728,7 @@ const AudioPlayer = {
       track.classList.toggle('snap-active', true);
       newTime = snap.time;
       progress = snap.progress;
+      this._setActiveMarker(snap.index);
       const hapticThreshold = Math.max(1, rect.width * 0.001);
       if (snap.index !== this.lastSnapIndex && snap.distance <= hapticThreshold) {
         this._hapticTick(6);
@@ -560,6 +739,7 @@ const AudioPlayer = {
     } else {
       track.classList.toggle('snap-active', false);
       this.lastSnapIndex = null;
+      this._setActiveMarker(null);
     }
 
     this.audioElement.currentTime = Math.max(0, Math.min(duration, newTime));
@@ -597,7 +777,10 @@ const AudioPlayer = {
     durationEl.style.minWidth = '';
     currentTimeEl.style.minWidth = '';
 
-    const maxWidth = Math.max(durationEl.offsetWidth, currentTimeEl.offsetWidth);
+    // Smaller base width on mobile for more seekbar room
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const baseWidth = isMobile ? 44 : 72;
+    const maxWidth = Math.max(durationEl.offsetWidth, currentTimeEl.offsetWidth, baseWidth);
     if (!maxWidth) return;
 
     durationEl.style.minWidth = `${maxWidth}px`;
@@ -700,6 +883,14 @@ const AudioPlayer = {
     }
 
     State.updateAudioState({ playing });
+  },
+
+  /**
+   * Update loading state
+   * @param {boolean} loading - Whether audio is loading
+   */
+  _updateLoadingState(loading) {
+    State.updateAudioState({ loading });
   },
 
   /**

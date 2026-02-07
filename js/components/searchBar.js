@@ -5,7 +5,7 @@
 
 import State from '../state.js';
 import { icon, $ } from '../utils/dom.js';
-import { debounce } from '../utils/formatters.js';
+import { debounce, toKurdishNumber } from '../utils/formatters.js';
 
 const SearchBar = {
   container: null,
@@ -110,12 +110,12 @@ const SearchBar = {
    */
   _showResults(results, query, onSelect) {
     const strings = State.get('appData')?.uiStrings || {};
-    const { surahs, books } = results;
+    const { surahs, verses, books } = results;
 
-    if (surahs.length === 0 && books.length === 0) {
+    if (surahs.length === 0 && verses.length === 0 && books.length === 0) {
       this.resultsContainer.innerHTML = `
         <div class="p-4 text-center text-gray-500">
-          <p>${strings.noResults || 'هیچ ئەنجامێک نەدۆزرایەوە'}</p>
+          <p>${strings.noResults || '??? ???????? ???????????'}</p>
         </div>
       `;
       this.resultsContainer.classList.remove('hidden');
@@ -124,21 +124,21 @@ const SearchBar = {
 
     let html = '';
 
-    // Surahs
     if (surahs.length > 0) {
       html += `
         <div class="p-2 bg-emerald-50 border-b sticky top-0">
-          <span class="text-xs font-medium text-emerald-700">سورەکان</span>
+          <span class="text-xs font-medium text-emerald-700">${strings.surah || '????'}</span>
         </div>
       `;
       surahs.slice(0, 5).forEach(surah => {
         html += `
           <a href="#/surah/${surah.id}"
-             class="search-result block p-3 hover:bg-cream-50 border-b transition-colors">
+             class="search-result block p-3 hover:bg-cream-50 border-b transition-colors"
+             data-search-type="surah" data-surah-id="${surah.id}">
             <div class="flex items-center gap-3">
               <span class="w-8 h-8 bg-emerald-100 text-emerald-800 rounded-full
                           flex items-center justify-center text-sm font-bold">
-                ${surah.number}
+                ${toKurdishNumber(surah.number)}
               </span>
               <div>
                 <div class="font-medium text-gray-900">${surah.nameKurdish}</div>
@@ -150,19 +150,40 @@ const SearchBar = {
       });
     }
 
-    // Books
+    if (verses.length > 0) {
+      html += `
+        <div class="p-2 bg-emerald-50 border-b sticky top-0">
+          <span class="text-xs font-medium text-emerald-700">${strings.verse || '?????'}</span>
+        </div>
+      `;
+      verses.slice(0, 5).forEach(result => {
+        html += `
+          <a href="#/surah/${result.surahId}"
+             class="search-result block p-3 hover:bg-cream-50 border-b transition-colors"
+             data-search-type="verse" data-surah-id="${result.surahId}" data-verse-index="${result.verseIndex}">
+            <div class="text-xs text-emerald-700 mb-1">
+              ${result.surahNameKurdish || result.surahNameArabic} · ${strings.verse || '?????'} ${toKurdishNumber(result.verseNumber)}
+            </div>
+            <div class="text-sm text-gray-700">${result.snippet}</div>
+          </a>
+        `;
+      });
+    }
+
     if (books.length > 0) {
       html += `
         <div class="p-2 bg-purple-50 border-b sticky top-0">
-          <span class="text-xs font-medium text-purple-700">تەفسیرەکان</span>
+          <span class="text-xs font-medium text-purple-700">${strings.reviews || '???????????'}</span>
         </div>
       `;
       books.slice(0, 3).forEach(book => {
         html += `
           <a href="#/tafsir-reviews"
-             class="search-result block p-3 hover:bg-cream-50 border-b transition-colors">
+             class="search-result block p-3 hover:bg-cream-50 border-b transition-colors"
+             data-search-type="book" data-book-id="${book.id}">
             <div class="font-medium text-gray-900">${book.title}</div>
             <div class="text-sm text-gray-500">${book.author}</div>
+            ${book.snippet ? `<div class="text-xs text-gray-500 mt-1">${book.snippet}</div>` : ''}
           </a>
         `;
       });
@@ -172,9 +193,38 @@ const SearchBar = {
     this.resultsContainer.classList.remove('hidden');
     this.isOpen = true;
 
-    // Add click handlers to close on selection
     this.resultsContainer.querySelectorAll('.search-result').forEach(result => {
       result.addEventListener('click', () => {
+        const type = result.dataset.searchType;
+        const surahId = result.dataset.surahId;
+        const verseIndex = result.dataset.verseIndex;
+        const bookId = result.dataset.bookId;
+        const targetQuery = query;
+        if (type === 'verse') {
+          State.set('searchTarget', {
+            type: 'verse',
+            surahId: Number(surahId),
+            verseIndex: Number(verseIndex),
+            query: targetQuery
+          });
+        } else if (type === 'surah') {
+          State.set('searchTarget', {
+            type: 'surah',
+            surahId: Number(surahId),
+            query: targetQuery
+          });
+        } else if (type === 'book' && bookId) {
+          const matchedBook = books.find(book => book.id === bookId);
+          if (matchedBook) {
+            State.set('searchTarget', {
+              type: 'book',
+              bookId,
+              matchField: matchedBook.matchField,
+              query: targetQuery
+            });
+          }
+          State.set('tafsirScrollTo', bookId);
+        }
         this._hideResults();
         this.inputElement.value = '';
         if (onSelect) onSelect();

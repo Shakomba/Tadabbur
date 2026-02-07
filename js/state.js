@@ -19,6 +19,7 @@ const State = {
     },
     searchQuery: '',
     searchResults: [],
+    searchTarget: null,
     isLoading: true,
     mobileMenuOpen: false
   },
@@ -138,6 +139,20 @@ const State = {
   },
 
   /**
+   * Get a contiguous range of surahs by their `number` field.
+   * Does not modify the original data; returns a new array sorted by `number` ascending.
+   * @param {number} start - Starting surah number (inclusive)
+   * @param {number} end - Ending surah number (inclusive)
+   * @returns {Array} Array of surah objects in the requested range
+   */
+  getSurahsRange(start = 1, end = 114) {
+    const surahs = Array.isArray(this.get('appData')?.surahs) ? [...this.get('appData').surahs] : [];
+    return surahs
+      .filter(s => typeof s.number === 'number' && s.number >= start && s.number <= end)
+      .sort((a, b) => a.number - b.number);
+  },
+
+  /**
    * Get surahs with available lessons
    * @returns {Array} Array of surahs with lessons
    */
@@ -153,33 +168,170 @@ const State = {
    */
   search(query) {
     if (!query || query.length < 2) {
-      return { surahs: [], books: [] };
+      return { surahs: [], verses: [], books: [] };
     }
 
     const appData = this.get('appData');
-    if (!appData) return { surahs: [], books: [] };
+    if (!appData) return { surahs: [], verses: [], books: [] };
 
-    const normalizedQuery = query.toLowerCase();
+    const normalize = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+        .replace(/\u0640/g, '')
+        .replace(/[\u200c\u200d\u200e\u200f\u2066-\u2069]/g, '')
+        .replace(/[إأآ]/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/ؤ/g, 'و')
+        .replace(/ئ/g, 'ي')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const normalizedQuery = normalize(query);
+    if (!normalizedQuery) {
+      return { surahs: [], verses: [], books: [] };
+    }
+
+    const scoreField = (text, baseScore = 0) => {
+      if (!text) return null;
+      const normalizedText = normalize(text);
+      const index = normalizedText.indexOf(normalizedQuery);
+      if (index === -1) return null;
+
+      let score = baseScore;
+      if (normalizedText === normalizedQuery) {
+        score += 100;
+      } else if (normalizedText.startsWith(normalizedQuery)) {
+        score += 70;
+      } else {
+        score += 40;
+      }
+      score += Math.max(0, 40 - index);
+      return { score, index, text };
+    };
+
+    const scoreKeywordList = (values, baseScore = 0) => {
+      if (!values) return null;
+      const list = Array.isArray(values) ? values : [values];
+      let best = null;
+      list.forEach((value) => {
+        if (!value) return;
+        const result = scoreField(value, baseScore);
+        if (!result) return;
+        if (!best || result.score > best.score) {
+          best = result;
+        }
+      });
+      return best;
+    };
+
+    const buildSnippet = (text, index, length = 90) => {
+      if (!text) return '';
+      const safeText = String(text);
+      if (typeof index !== 'number' || index < 0) {
+        return safeText.length > length ? `${safeText.slice(0, length)}…` : safeText;
+      }
+      const start = Math.max(0, index - Math.floor(length / 2));
+      const end = Math.min(safeText.length, start + length);
+      let snippet = safeText.slice(start, end);
+      if (start > 0) snippet = `…${snippet}`;
+      if (end < safeText.length) snippet = `${snippet}…`;
+      return snippet;
+    };
 
     // Search surahs
-    const surahs = appData.surahs.filter(surah =>
-      surah.nameArabic.includes(query) ||
-      surah.nameKurdish.includes(query) ||
-      surah.meaningKurdish?.includes(query) ||
-      surah.verses.some(v =>
-        v.textArabic.includes(query) ||
-        v.tafsirKurdish.includes(query)
-      )
-    );
+    const surahs = (appData.surahs || [])
+      .map((surah) => {
+        const candidates = [
+          { field: 'nameArabic', result: scoreField(surah.nameArabic, 60) },
+          { field: 'nameKurdish', result: scoreField(surah.nameKurdish, 70) },
+          { field: 'meaningKurdish', result: scoreField(surah.meaningKurdish, 45) },
+          { field: 'nameTranslit', result: scoreField(surah.nameTranslit, 35) }
+        ].filter(item => item.result);
+
+        if (candidates.length === 0) return null;
+        const best = candidates.reduce((max, item) =>
+          item.result.score > max.result.score ? item : max
+        );
+        return {
+          ...surah,
+          score: best.result.score,
+          matchField: best.field
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+
+    // Search verses
+    const verseMatches = [];
+    (appData.surahs || []).forEach((surah) => {
+      const verses = Array.isArray(surah.verses) ? surah.verses : [];
+      verses.forEach((verse, index) => {
+        const verseText = verse.textUthmani || verse.textArabic || verse.textKurdish || '';
+        const candidates = [
+          { type: 'keyword', result: scoreKeywordList(verse.keywords, 90) },
+          { type: 'tagline', result: scoreKeywordList(verse.taglines, 85) },
+          { type: 'arabic', result: scoreField(verse.textArabic, 55) },
+          { type: 'uthmani', result: scoreField(verse.textUthmani, 60) },
+          { type: 'translation', result: scoreField(verse.textKurdish, 70) },
+          { type: 'tafsir', result: scoreField(verse.tafsirKurdish, 50) }
+        ].filter(item => item.result);
+
+        if (candidates.length === 0) return;
+        const best = candidates.reduce((max, item) =>
+          item.result.score > max.result.score ? item : max
+        );
+
+        const useIndex = best.type !== 'keyword' && best.type !== 'tagline';
+        const snippet = buildSnippet(verseText || best.result.text, useIndex ? best.result.index : undefined);
+        verseMatches.push({
+          surahId: surah.id,
+          surahNameArabic: surah.nameArabic,
+          surahNameKurdish: surah.nameKurdish,
+          verseIndex: index,
+          verseNumber: verse.numberInSurah ?? verse.number ?? index + 1,
+          snippet,
+          score: best.result.score,
+          matchType: best.type
+        });
+      });
+    });
+
+    const verses = verseMatches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
 
     // Search tafsir books
-    const books = appData.tafsirBooks.filter(book =>
-      book.title.includes(query) ||
-      book.author.includes(query) ||
-      book.description.includes(query)
-    );
+    const books = (appData.tafsirBooks || [])
+      .map((book) => {
+        const candidates = [
+          { field: 'title', result: scoreField(book.title, 75) },
+          { field: 'author', result: scoreField(book.author, 55) },
+          { field: 'description', result: scoreField(book.description, 35) }
+        ].filter(item => item.result);
 
-    return { surahs, books };
+        if (candidates.length === 0) return null;
+        const best = candidates.reduce((max, item) =>
+          item.result.score > max.result.score ? item : max
+        );
+        return {
+          ...book,
+          score: best.result.score,
+          matchField: best.field,
+          matchIndex: best.result.index,
+          matchText: best.result.text,
+          snippet: best.field === 'description'
+            ? buildSnippet(best.result.text, best.result.index)
+            : ''
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+
+    return { surahs, verses, books };
   },
 
   /**

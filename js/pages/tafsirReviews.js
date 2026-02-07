@@ -1,13 +1,17 @@
 /**
- * Tafsir Reviews Page Component
+ * Tafsir Reviews Page - Simple grid with modal details
  */
 
 import State from '../state.js';
 import { icon } from '../utils/dom.js';
-import { toKurdishNumber } from '../utils/formatters.js';
 
 const TafsirReviewsPage = {
   container: null,
+  activeBook: null,
+  keydownHandler: null,
+  scrollUnsub: null,
+  searchUnsub: null,
+  hasRendered: false,
 
   /**
    * Mount tafsir reviews page
@@ -15,7 +19,28 @@ const TafsirReviewsPage = {
    */
   mount(container) {
     this.container = container;
-    this.render();
+    this.activeBook = null;
+
+    // Only render if not already rendered
+    if (!this.hasRendered || !this.container.innerHTML.trim()) {
+      this.render();
+      this._setupEventListeners();
+      this.hasRendered = true;
+    }
+
+    this._focusTargetBook();
+    this._focusSearchTarget();
+
+    this.scrollUnsub = State.subscribe('tafsirScrollTo', () => this._focusTargetBook());
+    this.searchUnsub = State.subscribe('searchTarget', () => this._focusSearchTarget());
+
+    this.keydownHandler = (event) => {
+      if (event.key === 'Escape' && this.activeBook) {
+        this._closeModal();
+      }
+    };
+
+    document.addEventListener('keydown', this.keydownHandler);
   },
 
   /**
@@ -25,94 +50,105 @@ const TafsirReviewsPage = {
     const appData = State.get('appData');
     const strings = appData?.uiStrings || {};
     const books = appData?.tafsirBooks || [];
+    const hasModal = Boolean(this.activeBook);
+
+    document.body.classList.toggle('modal-open', hasModal);
+
+    const title = strings.tafsirReviewsTitle || 'ناساندنی تەفسیرەکان';
+    const subtitle = strings.tafsirReviewsSubtitle || 'کورتەیەک لەسەر کتێبە تەفسیرەکان بۆ هەڵبژاردنی باشترین سەرچاوە';
 
     this.container.innerHTML = `
-      <div class="min-h-screen bg-cream-50">
-        <!-- Header -->
-        <div class="bg-cream-50 text-white py-12 md:py-16">
-          <div class="max-w-6xl mx-auto px-4">
-            <h1 class="text-3xl md:text-4xl font-bold mb-4">
-              ناساندنی تەفسیرەکان
-            </h1>
-            <p class="text-emerald-200 text-lg">
-              ناساندن و پێداچوونەوە بە کتێبە تەفسیرییە ناوداڕەکان
-            </p>
+      <div class="tafsir-library min-h-screen">
+        <div class="tafsir-hero">
+          <div class="max-w-6xl mx-auto px-4 py-10 md:py-14">
+            <div class="tafsir-hero-inner">
+              <h1 class="tafsir-hero-title">${title}</h1>
+              <p class="tafsir-hero-subtitle">
+                ${subtitle}
+              </p>
+            </div>
           </div>
         </div>
 
-        <!-- Books Grid -->
-        <div class="max-w-6xl mx-auto px-4 py-12 ">
-          <div class="grid md:grid-cols-2 gap-8">
-            ${books.map(book => this._renderBookCard(book)).join('')}
-          </div>
+        <div class="max-w-6xl mx-auto px-4 pb-16">
+          ${books.length > 0 ? `
+            <div class="tafsir-grid-simple" id="books-grid">
+              ${books.map((book, index) => this._renderBookCard(book, index)).join('')}
+            </div>
+          ` : `
+            <div class="text-center py-16 text-gray-500">
+              <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                ${icon('book', 'w-8 h-8 text-gray-400')}
+              </div>
+              <p class="text-lg">${strings.noBooksFound || '??? ?????? ???????????'}</p>
+            </div>
+          `}
         </div>
+
+        ${this._renderModal()}
       </div>
     `;
   },
 
   /**
-   * Render a 3D book card
+   * Render a book card
    * @param {Object} book - Book object
+   * @param {number} index - Book index
    * @returns {string} HTML string
    */
-  _renderBookCard(book) {
-    const strings = State.get('appData')?.uiStrings || {};
+  _renderBookCard(book, index) {
+    const coverImage = book.coverImage || '';
+    const coverMarkup = coverImage
+      ? `<img class="tafsir-cover-image" src="${coverImage}" alt="${book.title}" loading="lazy">`
+      : '';
+    return `
+      <button class="tafsir-card" data-book-id="${book.id}" type="button"
+              style="--delay:${index * 70}ms;"
+              aria-label="کتێبی تەفسیر ${book.title}">
+        <div class="tafsir-cover">
+          ${coverMarkup}
+          <div class="tafsir-cover-shine"></div>
+          <div class="tafsir-cover-mark"></div>
+        </div>
+        <div class="tafsir-meta">
+          <h3 class="tafsir-book-title">${book.title}</h3>
+          <p class="tafsir-book-author">${book.author}</p>
+        </div>
+      </button>
+    `;
+  },
 
-    // Generate stars
-    const stars = Array.from({ length: 5 }, (_, i) =>
-      i < book.rating
-        ? `<svg class="w-4 h-4 text-gold-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>`
-        : `<svg class="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>`
-    ).join('');
+  _renderModal() {
+    const book = this.activeBook;
+    const title = book?.title || '';
+    const author = book?.author || '';
+    const description = book?.description || '';
+    const coverImage = book?.coverImage || '';
+    const formattedDescription = description
+      .replace(/\r\n/g, '\n')
+      .replace(/\s*🔸/g, '\n\n🔸')
+      .replace(/\s*▫️/g, '\n▫️');
+    const coverMarkup = coverImage
+      ? `<img class="tafsir-cover-image" src="${coverImage}" alt="${title}" loading="lazy">`
+      : '';
+    const isOpen = Boolean(book);
 
     return `
-      <div class="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-cream-200">
-        <div class="flex gap-6">
-          <!-- 3D Book Cover -->
-          <div class="book-card flex-shrink-0">
-            <div class="book-cover w-32 h-44 rounded-md overflow-hidden relative"
-                 style="background-color: ${book.coverColor}">
-              <!-- Book spine -->
-              <div class="book-spine" style="background-color: ${this._darkenColor(book.coverColor)}"></div>
-
-              <!-- Book edge -->
-              <div class="book-edge"></div>
-
-              <!-- Book front -->
-              <div class="absolute inset-0 flex flex-col items-center justify-center p-4 text-white">
-                <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-3">
-                  ${icon('book', 'w-5 h-5')}
-                </div>
-                <div class="text-center">
-                  <h4 class="text-sm font-bold leading-tight">${book.title}</h4>
-                </div>
+      <div class="tafsir-modal ${isOpen ? 'open' : ''}" aria-hidden="${!isOpen}">
+        <div class="tafsir-modal-overlay" data-modal-close></div>
+        <div class="tafsir-modal-card" role="dialog" aria-modal="true" aria-labelledby="tafsir-modal-title">
+          <button class="tafsir-modal-close" type="button" data-modal-close aria-label="Close">
+            ${icon('close', 'w-5 h-5')}
+          </button>
+          <div class="tafsir-modal-body">
+            <div class="tafsir-modal-content">
+              <div class="tafsir-modal-cover">
+                ${coverMarkup}
               </div>
-            </div>
-          </div>
-
-          <!-- Book Info -->
-          <div class="flex-1 min-w-0">
-            <h3 class="text-xl font-bold text-gray-900 mb-2">${book.title}</h3>
-            <p class="text-emerald-700 font-medium mb-3">${book.author}</p>
-
-            <!-- Rating -->
-            <div class="flex items-center gap-1 mb-4">
-              ${stars}
-            </div>
-
-            <!-- Description -->
-            <p class="text-gray-600 text-sm leading-relaxed mb-4">
-              ${book.description}
-            </p>
-
-            <!-- Meta Info -->
-            <div class="flex flex-wrap gap-3 text-sm">
-              <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg">
-                ${toKurdishNumber(book.pageCount)} ${strings.pages || 'پەڕە'}
-              </span>
-              <span class="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg">
-                ${book.language}
-              </span>
+              <h3 id="tafsir-modal-title" class="tafsir-modal-title">${title}</h3>
+              <p class="tafsir-modal-author">${author}</p>
+              <div class="tafsir-modal-divider"></div>
+              <p class="tafsir-modal-description">${formattedDescription}</p>
             </div>
           </div>
         </div>
@@ -121,23 +157,213 @@ const TafsirReviewsPage = {
   },
 
   /**
-   * Darken a hex color for book spine
-   * @param {string} color - Hex color
-   * @returns {string} Darkened hex color
+   * Set up event listeners
    */
-  _darkenColor(color) {
-    // Simple darkening by reducing RGB values
-    const hex = color.replace('#', '');
-    const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - 30);
-    const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - 30);
-    const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - 30);
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  _setupEventListeners() {
+    // Book card clicks
+    this.container.querySelectorAll('.tafsir-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const bookId = card.dataset.bookId;
+        const book = State.get('appData')?.tafsirBooks?.find(b => b.id === bookId);
+        if (book) {
+          this._openModal(book);
+        }
+      });
+    });
+
+    this.container.querySelectorAll('[data-modal-close]').forEach(el => {
+      el.addEventListener('click', () => {
+        this._closeModal();
+      });
+    });
+  },
+
+  /**
+   * Open modal with book details
+   * @param {Object} book - Book object
+   */
+  _openModal(book) {
+    this.activeBook = book;
+    document.body.classList.add('modal-open');
+
+    const modalElement = this.container.querySelector('.tafsir-modal');
+    if (modalElement) {
+      // Update modal content
+      const title = book?.title || '';
+      const author = book?.author || '';
+      const description = book?.description || '';
+      const coverImage = book?.coverImage || '';
+      const formattedDescription = description
+        .replace(/\r\n/g, '\n')
+        .replace(/\s*🔸/g, '\n\n🔸')
+        .replace(/\s*▫️/g, '\n▫️');
+      const coverMarkup = coverImage
+        ? `<img class="tafsir-cover-image" src="${coverImage}" alt="${title}" loading="lazy">`
+        : '';
+
+      modalElement.classList.add('open');
+      modalElement.setAttribute('aria-hidden', 'false');
+
+      const modalContent = modalElement.querySelector('.tafsir-modal-content');
+      if (modalContent) {
+        modalContent.innerHTML = `
+          <div class="tafsir-modal-cover">
+            ${coverMarkup}
+          </div>
+          <h3 id="tafsir-modal-title" class="tafsir-modal-title">${title}</h3>
+          <p class="tafsir-modal-author">${author}</p>
+          <div class="tafsir-modal-divider"></div>
+          <p class="tafsir-modal-description">${formattedDescription}</p>
+        `;
+      }
+
+      // Re-attach close event listeners
+      modalElement.querySelectorAll('[data-modal-close]').forEach(el => {
+        el.addEventListener('click', () => this._closeModal());
+      });
+    }
+  },
+
+  _openModalWithHighlight(book, highlight) {
+    this.activeBook = book;
+    document.body.classList.add('modal-open');
+
+    const modalElement = this.container.querySelector('.tafsir-modal');
+    if (!modalElement) return;
+
+    const title = book?.title || '';
+    const author = book?.author || '';
+    const description = book?.description || '';
+    const coverImage = book?.coverImage || '';
+    const formattedDescription = description
+      .replace(/\r\n/g, '\n')
+      .replace(/\s*🔸/g, '\n\n🔸')
+      .replace(/\s*▫️/g, '\n▫️');
+    const coverMarkup = coverImage
+      ? `<img class="tafsir-cover-image" src="${coverImage}" alt="${title}" loading="lazy">`
+      : '';
+
+    const highlightedTitle = this._highlightMatch(title, highlight?.query, highlight?.matchField === 'title');
+    const highlightedAuthor = this._highlightMatch(author, highlight?.query, highlight?.matchField === 'author');
+    const highlightedDescription = this._highlightMatch(
+      formattedDescription,
+      highlight?.query,
+      highlight?.matchField === 'description'
+    );
+
+    modalElement.classList.add('open');
+    modalElement.setAttribute('aria-hidden', 'false');
+
+    const modalContent = modalElement.querySelector('.tafsir-modal-content');
+    if (modalContent) {
+      modalContent.innerHTML = `
+        <div class="tafsir-modal-cover">
+          ${coverMarkup}
+        </div>
+        <h3 id="tafsir-modal-title" class="tafsir-modal-title">${highlightedTitle}</h3>
+        <p class="tafsir-modal-author">${highlightedAuthor}</p>
+        <div class="tafsir-modal-divider"></div>
+        <p class="tafsir-modal-description">${highlightedDescription}</p>
+      `;
+    }
+
+    modalElement.querySelectorAll('[data-modal-close]').forEach(el => {
+      el.addEventListener('click', () => this._closeModal());
+    });
+
+    requestAnimationFrame(() => {
+      const highlightElement = modalElement.querySelector('.search-highlight-text');
+      if (highlightElement) {
+        highlightElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    window.setTimeout(() => {
+      modalElement.querySelectorAll('.search-highlight-text').forEach(el => {
+        el.classList.remove('search-highlight-text');
+      });
+    }, 1800);
+  },
+
+  _highlightMatch(text, query, shouldHighlight) {
+    if (!text || !query || !shouldHighlight) return text || '';
+    const safeQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = text.match(new RegExp(safeQuery, 'i'));
+    if (!match) return text;
+    const target = match[0];
+    return text.replace(new RegExp(safeQuery, 'i'), `<span class="search-highlight-text">${target}</span>`);
+  },
+
+  /**
+   * Close modal
+   */
+  _closeModal() {
+    this.activeBook = null;
+    document.body.classList.remove('modal-open');
+
+    const modalElement = this.container.querySelector('.tafsir-modal');
+    if (modalElement) {
+      modalElement.classList.remove('open');
+      modalElement.setAttribute('aria-hidden', 'true');
+    }
+  },
+
+  _focusTargetBook() {
+    const targetId = State.get('tafsirScrollTo');
+    if (!targetId) return;
+    const card = this.container.querySelector(`[data-book-id="${targetId}"]`);
+    if (!card) return;
+    requestAnimationFrame(() => {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('tafsir-card-highlight');
+      window.setTimeout(() => {
+        card.classList.remove('tafsir-card-highlight');
+      }, 1200);
+    });
+    State.set('tafsirScrollTo', null);
+  },
+
+  _focusSearchTarget() {
+    const target = State.get('searchTarget');
+    if (!target || target.type !== 'book') return;
+
+    const targetId = target.bookId;
+    const card = this.container.querySelector(`[data-book-id="${targetId}"]`);
+    const book = State.get('appData')?.tafsirBooks?.find(item => item.id === targetId);
+
+    if (card) {
+      requestAnimationFrame(() => {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('tafsir-card-highlight');
+        window.setTimeout(() => {
+          card.classList.remove('tafsir-card-highlight');
+        }, 1800);
+      });
+    }
+
+    if (book && target.query) {
+      this._openModalWithHighlight(book, target);
+    }
+
+    State.set('searchTarget', null);
   },
 
   /**
    * Unmount component
    */
   unmount() {
+    if (this.keydownHandler) {
+      document.removeEventListener('keydown', this.keydownHandler);
+      this.keydownHandler = null;
+    }
+    if (this.scrollUnsub) {
+      this.scrollUnsub();
+      this.scrollUnsub = null;
+    }
+    if (this.searchUnsub) {
+      this.searchUnsub();
+      this.searchUnsub = null;
+    }
+    document.body.classList.remove('modal-open');
     this.container.innerHTML = '';
   }
 };

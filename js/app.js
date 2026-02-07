@@ -7,15 +7,16 @@ import State from './state.js';
 import Router from './router.js';
 import Header from './components/header.js';
 import AudioPlayer from './components/audioPlayer.js';
+import Footer from './components/footer.js';
 import { AudioSync } from './utils/audio.js';
 
 // Import pages
 import HomePage from './pages/home.js';
 import AudioLessonsPage from './pages/audioLessons.js';
 import ReadingViewPage from './pages/readingView.js';
+import PreamblePage from './pages/preamble.js';
 import BooksPage from './pages/books.js';
 import TafsirReviewsPage from './pages/tafsirReviews.js';
-import AboutPage from './pages/about.js';
 
 /**
  * Application initialization
@@ -36,6 +37,7 @@ const App = {
       const headerContainer = document.getElementById('header');
       const contentContainer = document.getElementById('app-content');
       const audioPlayerContainer = document.getElementById('audio-player');
+      const footerContainer = document.getElementById('footer');
 
       // Mount persistent header
       if (headerContainer) {
@@ -45,6 +47,10 @@ const App = {
       // Mount persistent audio player
       if (audioPlayerContainer) {
         AudioPlayer.mount(audioPlayerContainer);
+      }
+
+      if (footerContainer) {
+        Footer.mount(footerContainer);
       }
 
       // Initialize audio sync with audio element
@@ -77,9 +83,9 @@ const App = {
     Router.register('/', HomePage);
     Router.register('/audio-lessons', AudioLessonsPage);
     Router.register('/surah/:id', ReadingViewPage);
+    Router.register('/preamble/:id', PreamblePage);
     Router.register('/books', BooksPage);
     Router.register('/tafsir-reviews', TafsirReviewsPage);
-    Router.register('/about', AboutPage);
   },
 
   /**
