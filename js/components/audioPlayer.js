@@ -27,6 +27,8 @@ const AudioPlayer = {
   _blobUrl: null,
   _sourceToken: 0,
   _sourcePromise: null,
+  _githubRepoMeta: null,
+  _githubBranchPromise: null,
   speedOptions: [0.5, 0.75, 1, 1.25, 1.5, 2],
   currentSpeed: 1,
 
@@ -1009,8 +1011,9 @@ const AudioPlayer = {
     if (!this.audioElement) return;
     const token = ++this._sourceToken;
     this._revokeBlobUrl();
+    const resolvedAudioUrl = await this._resolveAudioUrl(audioUrl);
 
-    const isLocal = this._isLocalAudio(audioUrl);
+    const isLocal = this._isLocalAudio(resolvedAudioUrl);
     this.audioElement.preload = isLocal ? 'auto' : 'metadata';
 
     const setSource = (src) => {
@@ -1021,7 +1024,7 @@ const AudioPlayer = {
 
     if (isLocal) {
       try {
-        const response = await fetch(encodeURI(audioUrl));
+        const response = await fetch(encodeURI(resolvedAudioUrl));
         if (!response.ok) {
           throw new Error(`Failed to load audio: ${response.status}`);
         }
@@ -1032,10 +1035,10 @@ const AudioPlayer = {
         setSource(this._blobUrl);
       } catch (error) {
         console.warn('Falling back to direct audio src:', error);
-        setSource(audioUrl);
+        setSource(resolvedAudioUrl);
       }
     } else {
-      setSource(audioUrl);
+      setSource(resolvedAudioUrl);
     }
 
     await this._waitForMetadata();
@@ -1059,7 +1062,103 @@ const AudioPlayer = {
   },
 
   _isLocalAudio(audioUrl) {
-    return !/^https?:\/\//i.test(audioUrl);
+    return !/^(?:https?:|blob:|data:)/i.test(audioUrl);
+  },
+
+  async _resolveAudioUrl(audioUrl) {
+    if (!audioUrl || typeof audioUrl !== 'string') return audioUrl;
+
+    const trimmed = audioUrl.trim();
+    if (!this._isLocalAudio(trimmed)) {
+      return trimmed;
+    }
+
+    const normalizedPath = trimmed.replace(/^\.?\//, '');
+    const mediaUrl = await this._buildGitHubPagesMediaUrl(normalizedPath);
+    return mediaUrl || encodeURI(normalizedPath);
+  },
+
+  async _buildGitHubPagesMediaUrl(relativePath) {
+    if (!relativePath || !relativePath.startsWith('assets/audio/')) {
+      return null;
+    }
+
+    const repoMeta = this._getGitHubRepoMeta();
+    if (!repoMeta) return null;
+
+    const branch = await this._getGitHubDefaultBranch(repoMeta);
+    const encodedBranch = encodeURIComponent(branch || 'main');
+    const encodedPath = relativePath
+      .split('/')
+      .map((segment) => {
+        try {
+          return encodeURIComponent(decodeURIComponent(segment));
+        } catch (error) {
+          return encodeURIComponent(segment);
+        }
+      })
+      .join('/');
+
+    return `https://media.githubusercontent.com/media/${repoMeta.owner}/${repoMeta.repo}/${encodedBranch}/${encodedPath}`;
+  },
+
+  _getGitHubRepoMeta() {
+    if (this._githubRepoMeta) {
+      return this._githubRepoMeta;
+    }
+
+    if (typeof window === 'undefined') return null;
+
+    const metaRepo = document.querySelector('meta[name="github-repo"]')?.getAttribute('content')?.trim();
+    const globalRepo = window.__TADABUR_GITHUB_REPO__?.trim?.();
+    const configuredRepo = metaRepo || globalRepo || '';
+    if (configuredRepo && configuredRepo.includes('/')) {
+      const [owner, repo] = configuredRepo.split('/').map((value) => value.trim()).filter(Boolean);
+      if (owner && repo) {
+        this._githubRepoMeta = { owner, repo };
+        return this._githubRepoMeta;
+      }
+    }
+
+    const host = window.location.hostname || '';
+    if (!host.endsWith('.github.io')) {
+      return null;
+    }
+
+    const owner = host.split('.')[0];
+    if (!owner) return null;
+
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const repo = segments[0] || `${owner}.github.io`;
+    this._githubRepoMeta = { owner, repo };
+    return this._githubRepoMeta;
+  },
+
+  async _getGitHubDefaultBranch(repoMeta) {
+    if (!repoMeta) return 'main';
+
+    const metaBranch = document.querySelector('meta[name="github-branch"]')?.getAttribute('content')?.trim();
+    const globalBranch = window.__TADABUR_GITHUB_BRANCH__?.trim?.();
+    const configuredBranch = metaBranch || globalBranch || '';
+    if (configuredBranch) {
+      return configuredBranch;
+    }
+
+    if (!this._githubBranchPromise) {
+      this._githubBranchPromise = (async () => {
+        try {
+          const response = await fetch(`https://api.github.com/repos/${repoMeta.owner}/${repoMeta.repo}`);
+          if (!response.ok) return 'main';
+          const payload = await response.json();
+          const branch = payload?.default_branch;
+          return typeof branch === 'string' && branch.trim() ? branch.trim() : 'main';
+        } catch (error) {
+          return 'main';
+        }
+      })();
+    }
+
+    return this._githubBranchPromise;
   },
 
   _setBarVisible(visible) {

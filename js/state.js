@@ -115,7 +115,8 @@ const State = {
    */
   async loadData() {
     try {
-      const response = await fetch('data/data.json');
+      const dataUrl = new URL('data/data.json', window.location.href).toString();
+      const response = await fetch(dataUrl);
       if (!response.ok) {
         throw new Error('Failed to load data');
       }
