@@ -46,11 +46,11 @@ const Footer = {
     this.container.innerHTML = `
       <footer class="bg-emerald-950 text-white py-8">
         <div class="max-w-7xl mx-auto px-4">
-          <div class="flex flex-col md:flex-row-reverse w-full items-center md:items-start gap-6 mb-6">
+          <div class="flex flex-col lg:flex-row-reverse w-full items-center lg:items-start gap-6 mb-6">
 
-            <div class="flex-1 flex flex-col items-center md:items-end text-center md:text-right order-3 md:order-1">
+            <div class="flex-1 flex flex-col items-center lg:items-end text-center lg:text-right order-3 lg:order-1">
               <h3 class="text-gold-400 font-bold mb-6">${followTitle}</h3>
-              <div class="flex gap-2.5 items-center justify-center md:justify-end mb-5 w-full">
+              <div class="flex gap-2.5 items-center justify-center lg:justify-end mb-5 w-full">
                 <a href="${socialLinks.telegram || '#'}" class="w-8 h-8 bg-cream-100/10 rounded-lg flex items-center justify-center hover:bg-cream-100/20 transition-colors">
                   <img src="assets/images/telegram.png" alt="Telegram" class="w-4 h-4" />
                 </a>
@@ -58,8 +58,8 @@ const Footer = {
                   ${icon('youtube', 'w-4 h-4 text-cream-200')}
                 </a>
               </div>
-              <a href="mailto:info@tadabur.com" class="text-cream-200 text-sm hover:text-gold-300 transition-colors">
-                info@tadabur.com
+              <a href="mailto:tadabbur@bnkayhalabjaytaza.org" class="text-cream-200 text-sm hover:text-gold-300 transition-colors">
+                tadabbur@bnkayhalabjaytaza.org
               </a>
             </div>
 
@@ -74,9 +74,9 @@ const Footer = {
               </nav>
             </div>
 
-            <div class="flex-1 flex flex-col items-center md:items-start text-center md:text-left order-1 md:order-3">
+            <div class="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left order-1 lg:order-3">
               <img src="assets/images/TadabburLogo.png" alt="${meta.appName || ''}" class="w-14 h-14 mb-3 opacity-90">
-              <p class="text-cream-200 text-sm leading-relaxed max-w-[280px] text-center md:text-right" dir="rtl">
+              <p class="text-cream-200 text-sm leading-relaxed max-w-[280px] text-center lg:text-right" dir="rtl">
                 ${meta.tagline || ''}
               </p>
             </div>

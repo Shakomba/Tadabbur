@@ -77,7 +77,7 @@ const HomePage = {
           <!-- Social Links -->
           <div>
             <h2 class="text-lg font-medium text-emerald-200 mb-4">${strings.followUs || 'لەگەڵمان بە'}</h2>
-            <div class="flex justify-center gap-4">
+            <div class="flex flex-wrap justify-center gap-4">
               <!-- Telegram -->
               <a href="${socialLinks.telegram || '#'}" target="_blank" rel="noopener noreferrer"
                  class="social-btn telegram flex items-center gap-3 px-6 py-3 rounded-xl text-white bg-blue-500 hover:bg-blue-600 transition-colors">
@@ -195,7 +195,7 @@ const HomePage = {
             </div>
           </div>
 
-          <div class="grid md:grid-cols-3 gap-12 mb-12">
+          <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-8 xl:gap-12 mb-12">
             ${featuredBooks.map((book, index) => {
               const coverImage = book.coverImage ? encodeURI(book.coverImage).replace(/'/g, '%27') : '';
               const heightClass = index === 1 ? 'h-72' : 'h-72';

@@ -1,13 +1,13 @@
 {
   "meta": {
     "appName": "تەدەبوری قورئان",
-    "appNameLatin": "Tadaburi Quran",
+    "appNameLatin": "Tadabburi Quran",
     "tagline": "تەفسیرکردنی قوڕئان بەپێی مەنهەجی سەلەف و زمانی عەرەبی؛ گەشتێک بۆ قوڵبوونەوە لە پەیامی خودا.",
     "version": "1.0.0"
   },
   "socialLinks": {
     "telegram": "https://t.me/t_qur4n",
-    "youtube": "https://www.youtube.com/@TadaburyQuran"
+    "youtube": "https://www.youtube.com/@TadabburiQuran"
   },
   "teacher": {
     "name": "سیروان حامد",
@@ -603,8 +603,8 @@
     {
       "id": 82,
       "number": 82,
-      "nameArabic": "الإنفطار",
-      "nameKurdish": "الإنفطار",
+      "nameArabic": "الانفطار",
+      "nameKurdish": "الانفطار",
       "meaningKurdish": "",
       "verseCount": 19,
       "revelationType": "مەكی",
@@ -1242,8 +1242,8 @@
     {
       "id": 84,
       "number": 84,
-      "nameArabic": "الإنشقاق",
-      "nameKurdish": "الإنشقاق",
+      "nameArabic": "الانشقاق",
+      "nameKurdish": "الانشقاق",
       "meaningKurdish": "",
       "verseCount": 25,
       "revelationType": "مەكی",

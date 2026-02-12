@@ -39,16 +39,16 @@ const Header = {
 
     this.container.innerHTML = `
       <nav class="bg-emerald-900 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-          <div class="flex items-center justify-between h-16 flex-row-reverse md:flex-row">
+        <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
+          <div class="flex items-center h-16 gap-3 flex-row-reverse md:flex-row">
             <!-- Logo (left on mobile, left on desktop) -->
-            <a href="#/" class="flex items-center gap-3 flex-shrink-0 order-1">
+            <a href="#/" class="flex items-center gap-3 flex-shrink-0 min-w-0 order-1">
               <img src="assets/images/TadabburLogo.png" alt="تەدەبوری قورئان" class="h-12 w-12">
-              <span class="font-bold text-lg hidden sm:block">${appData?.meta?.appName || 'تەدەبوری قورئان'}</span>
+              <span class="font-bold text-lg hidden xl:block">${appData?.meta?.appName || 'تەدەبوری قورئان'}</span>
             </a>
 
             <!-- Mobile Search (centered) -->
-            <div class="flex md:hidden items-center order-2 flex-1 justify-center px-4">
+            <div class="flex md:hidden items-center order-2 flex-1 min-w-0 justify-center px-2">
               <div class="relative w-full max-w-xs">
                 <input type="text"
                        id="search-input-mobile-nav"
@@ -66,10 +66,10 @@ const Header = {
             </div>
 
             <!-- Desktop Navigation -->
-            <div class="hidden md:flex items-center gap-1 nav-desktop order-2">
+            <div class="hidden md:flex items-center gap-1 nav-desktop order-2 flex-1 min-w-0 justify-center overflow-x-auto">
               ${navigation.map(item => `
                 <a href="#${item.route}"
-                   class="nav-tab px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                   class="nav-tab px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap shrink-0
                           ${item.comingSoon ? 'opacity-75' : ''}"
                    data-route="${item.route}">
                   ${item.label}
@@ -79,19 +79,19 @@ const Header = {
             </div>
 
             <!-- Search Bar (Desktop) -->
-            <div class="hidden md:flex items-center gap-4 order-3">
-              <div class="relative">
+            <div class="hidden md:flex items-center order-3 shrink-0">
+              <div class="desktop-search-wrap relative">
                 <input type="text"
                        id="search-input-desktop"
                        placeholder="${strings.searchPlaceholder || 'گەڕان...'}"
-                       class="search-input bg-emerald-800 text-white placeholder-emerald-300
-                              border border-emerald-700 rounded-lg px-4 py-2 pr-10 w-64
+                       class="search-input desktop-search-input bg-emerald-800 text-white placeholder-emerald-300
+                              border border-emerald-700 rounded-lg px-4 py-2 pr-10 w-full
                               focus:border-gold-400 transition-colors">
                 <div class="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 pointer-events-none">
                   ${icon('search', 'w-4 h-4')}
                 </div>
                 <!-- Search Results Dropdown -->
-                <div id="search-results-desktop" class="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-xl
+                <div id="search-results-desktop" class="search-results-desktop-panel absolute top-full right-0 mt-2 bg-white rounded-lg shadow-xl
                             text-gray-900 max-h-96 overflow-y-auto hidden z-50">
                 </div>
               </div>

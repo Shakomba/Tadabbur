@@ -29,6 +29,7 @@ const AudioPlayer = {
   _sourcePromise: null,
   _githubRepoMeta: null,
   _githubBranchPromise: null,
+  _routeUnsubscribe: null,
   speedOptions: [0.5, 0.75, 1, 1.25, 1.5, 2],
   currentSpeed: 1,
 
@@ -44,6 +45,11 @@ const AudioPlayer = {
 
     // Subscribe to audio state changes
     State.subscribe('audioState', (state) => this._onAudioStateChange(state));
+
+    // Keep bottom spacing synced with route context (footer-visible vs reading pages).
+    this._routeUnsubscribe = State.subscribe('currentRoute', () => {
+      this._setContentPadding(this.isVisible);
+    });
   },
 
   /**
@@ -55,21 +61,9 @@ const AudioPlayer = {
     this.container.innerHTML = `
       <div class="audio-bar py-2 px-4">
         <div class="audio-bar-inner relative w-full">
-          <div class="audio-window-controls absolute -top-2 -right-4 hidden md:flex items-center gap-2 z-10" dir="ltr">
-            <button id="minimize-btn" class="w-8 h-8 flex items-center justify-center text-gold-400
-                                            hover:text-gold-300 transition-colors group"
-                    title="Minimize" aria-label="Minimize player">
-              <span class="block w-4 h-0.5 bg-gold-400 group-hover:bg-gold-300" aria-hidden="true"></span>
-            </button>
-            <button id="close-btn" class="w-8 h-8 flex items-center justify-center text-gold-400
-                                         hover:text-gold-300 transition-colors"
-                    title="Close" aria-label="Close player">
-              ${icon('close', 'w-4 h-4')}
-            </button>
-          </div>
           <div class="max-w-7xl mx-auto">
           <!-- Top Row: Progress Bar with Times -->
-          <div class="audio-progress-row flex items-center gap-3 mb-2">
+          <div class="audio-progress-row flex items-center gap-3 mb-2" dir="ltr">
             <!-- Duration (Left) -->
             <span class="audio-time text-emerald-300 text-sm tabular-nums shrink-0" id="duration">٠٠:٠٠</span>
 
@@ -84,6 +78,20 @@ const AudioPlayer = {
 
             <!-- Current Time (Right) -->
             <span class="audio-time text-white text-sm tabular-nums shrink-0" id="current-time">٠٠:٠٠</span>
+
+            <!-- Desktop Window Controls (Top Row) -->
+            <div class="audio-window-controls hidden lg:flex items-center gap-1 shrink-0" dir="ltr">
+              <button id="minimize-btn" class="w-8 h-8 flex items-center justify-center text-gold-400
+                                              hover:text-gold-300 transition-colors group"
+                      title="Minimize" aria-label="Minimize player">
+                <span class="block w-4 h-0.5 bg-gold-400 group-hover:bg-gold-300" aria-hidden="true"></span>
+              </button>
+              <button id="close-btn" class="w-8 h-8 flex items-center justify-center text-gold-400
+                                           hover:text-gold-300 transition-colors"
+                      title="Close" aria-label="Close player">
+                ${icon('close', 'w-4 h-4')}
+              </button>
+            </div>
           </div>
 
           <!-- Bottom Row: Controls & Info -->
@@ -108,7 +116,7 @@ const AudioPlayer = {
                   </div>
                 </div>
               </div>
-              <div class="hidden md:block min-w-0 max-w-[200px]">
+              <div class="audio-track-meta hidden xl:block min-w-0 max-w-[200px]">
                 <div class="text-white text-sm font-medium truncate" id="surah-name">-</div>
                 <div class="text-emerald-300 text-xs truncate" id="verse-info">-</div>
               </div>
@@ -144,7 +152,7 @@ const AudioPlayer = {
             </div>
 
             <!-- Right: Speed Control -->
-            <div class="audio-right-controls flex items-center flex-1 justify-end">
+            <div class="audio-right-controls flex items-center flex-1 justify-end gap-2">
               <div class="audio-right-slot">
                 <div class="speed-dropdown relative">
                   <button id="speed-btn" class="w-8 h-8 bg-emerald-800 rounded-lg text-gold-400
@@ -791,9 +799,11 @@ const AudioPlayer = {
     durationEl.style.minWidth = '';
     currentTimeEl.style.minWidth = '';
 
-    // Smaller base width on mobile for more seekbar room
+    // Keep enough room for window controls on smaller desktop sizes.
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
-    const baseWidth = isMobile ? 44 : 72;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const isSmallDesktop = !isMobile && viewportWidth > 0 && viewportWidth <= 1400;
+    const baseWidth = isMobile ? 44 : (isSmallDesktop ? 56 : 72);
     const maxWidth = Math.max(durationEl.offsetWidth, currentTimeEl.offsetWidth, baseWidth);
     if (!maxWidth) return;
 
@@ -1176,9 +1186,32 @@ const AudioPlayer = {
   },
 
   _setContentPadding(enabled) {
+    const spacing = enabled ? '120px' : '';
     const mainContent = document.getElementById('app-content');
+    const footerMount = document.getElementById('footer');
+    const currentRoute = State.get('currentRoute') || '';
+    const isReadingRoute = typeof currentRoute === 'string' && currentRoute.startsWith('/surah/');
+    const footerInner = footerMount?.querySelector('footer') || null;
+
+    // Reading pages hide the footer, so reserve space in main content only there.
+    // On other pages, apply spacing inside the rendered footer element (not the mount wrapper)
+    // to avoid transparent white gaps between content and footer.
     if (mainContent) {
-      mainContent.style.paddingBottom = enabled ? '120px' : '';
+      mainContent.style.paddingBottom = isReadingRoute ? spacing : '';
+    }
+    if (footerMount) {
+      footerMount.style.paddingBottom = '';
+    }
+    if (footerInner) {
+      footerInner.style.paddingBottom = isReadingRoute ? '' : spacing;
+    } else if (!isReadingRoute && enabled && footerMount && typeof window !== 'undefined') {
+      // Footer may render slightly after route change; apply spacing once it's mounted.
+      window.setTimeout(() => {
+        const retryFooterInner = footerMount.querySelector('footer');
+        if (retryFooterInner) {
+          retryFooterInner.style.paddingBottom = spacing;
+        }
+      }, 0);
     }
   },
 
@@ -1194,6 +1227,10 @@ const AudioPlayer = {
    * Unmount component
    */
   unmount() {
+    if (this._routeUnsubscribe) {
+      this._routeUnsubscribe();
+      this._routeUnsubscribe = null;
+    }
     if (this.audioElement) {
       this.audioElement.pause();
       this.audioElement.src = '';

@@ -24,6 +24,8 @@
 html {
   direction: rtl;
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -31,6 +33,23 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+#app-content {
+  width: 100%;
+  min-width: 0;
+}
+
+#footer {
+  background: #022c22;
+}
+
+img,
+video,
+canvas {
+  max-width: 100%;
 }
 
 /* ===== Hero Section ===== */
@@ -619,6 +638,18 @@ body.modal-open {
   position: relative;
 }
 
+.audio-progress-row {
+  min-width: 0;
+}
+
+.audio-progress-row .progress-track {
+  min-width: 0;
+}
+
+.audio-progress-row .audio-window-controls {
+  margin-inline-start: 0.25rem;
+}
+
 .progress-track::before {
   content: '';
   position: absolute;
@@ -645,6 +676,7 @@ body.modal-open {
 .audio-right-controls {
   margin-right: 0;
   padding-right: 0;
+  min-width: 0;
 }
 
 .audio-left-slot,
@@ -708,6 +740,38 @@ body.modal-open {
 
 .nav-tab.active {
   color: #d4a956;
+}
+
+.nav-desktop {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nav-desktop::-webkit-scrollbar {
+  display: none;
+}
+
+.desktop-search-wrap {
+  width: clamp(11rem, 18vw, 16rem);
+}
+
+.desktop-search-input {
+  width: 100%;
+}
+
+.search-results-desktop-panel {
+  width: min(22rem, calc(100vw - 2rem));
+}
+
+@media (min-width: 768px) and (max-width: 1180px) {
+  .nav-tab {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8125rem;
+  }
+
+  .desktop-search-wrap {
+    width: clamp(10rem, 17vw, 12.5rem);
+  }
 }
 
 /* ===== Search Input ===== */
@@ -850,6 +914,11 @@ body.modal-open {
 
 .surah-card.is-playing .surah-eq {
   opacity: 1;
+}
+
+.surah-info-row {
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
 }
 
 .duration-time {
@@ -1279,6 +1348,30 @@ body.modal-open {
   transform: rotate(-90deg);
   margin: 0;
   --volume-fill: 100%;
+}
+
+@media (min-width: 768px) and (max-width: 1200px) {
+  .audio-bar {
+    --audio-time-width: 56px;
+  }
+
+  .audio-bar .audio-progress-row {
+    gap: 0.45rem;
+  }
+
+  .audio-bar .audio-left-controls {
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 1201px) and (max-width: 1400px) {
+  .audio-bar {
+    --audio-time-width: 58px;
+  }
+
+  .audio-bar .audio-progress-row {
+    gap: 0.5rem;
+  }
 }
 
 @media (max-width: 768px) {
