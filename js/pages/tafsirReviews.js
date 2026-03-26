@@ -55,7 +55,7 @@ const TafsirReviewsPage = {
     document.body.classList.toggle('modal-open', hasModal);
 
     const title = strings.tafsirReviewsTitle || 'ناساندنی تەفسیرەکان';
-    const subtitle = strings.tafsirReviewsSubtitle || 'کورتەیەک لەسەر کتێبە تەفسیرەکان بۆ هەڵبژاردنی باشترین سەرچاوە';
+    const subtitle = strings.tafsirReviewsSubtitle || 'دەروازەیەک بۆ ئاشنابوون بە ڕێبازی موفەسیرەکان و ناسینی ئەو سەرچاوە زانستییانەی کە ڕێگەی تەدەبور و تێگەیشتن لە قورئانی پیرۆز ڕووناک دەکەنەوە';
 
     this.container.innerHTML = `
       <div class="tafsir-library min-h-screen">
