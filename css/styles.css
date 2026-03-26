@@ -1588,8 +1588,8 @@ body.modal-open {
    ───────────────────────────────────────────────────────────────────────── */
 
 /* ===== Methodology Section Spacing ===== */
-/* Increase line-height for methodology section paragraphs */
-section p.text-lg.leading-relaxed {
+/* Increase line-height for methodology section paragraphs only */
+section p.text-gray-700.text-lg.leading-relaxed {
   line-height: 2.4 !important;
   margin-bottom: 1rem;
   font-size: 1.2rem;
