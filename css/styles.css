@@ -1586,6 +1586,28 @@ body.modal-open {
 /* ─────────────────────────────────────────────────────────────────────────
    Active Ayah Highlighting (Reading View)
    ───────────────────────────────────────────────────────────────────────── */
+
+/* ===== Methodology Section Spacing ===== */
+/* Increase line-height for methodology section paragraphs */
+section p.text-lg.leading-relaxed {
+  line-height: 2.4 !important;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+/* ===== Methodology and Lesson Style Spacing ===== */
+section:has(h2:contains("مەنهەجمان")) p,
+section:has(h2:contains("شێوازی وانەکان")) p {
+  line-height: 1.95;
+}
+
+section:has(h2:contains("شێوازی وانەکان")) ul {
+  space-y-gap: 1.5rem;
+}
+
+section:has(h2:contains("شێوازی وانەکان")) li {
+  margin-bottom: 1.5rem;
+}
 .active-ayah {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
   box-shadow: 0 4px 20px rgba(212, 169, 86, 0.3) !important;
